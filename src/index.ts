@@ -109,6 +109,19 @@ export function apply(ctx: Context): void {
       ),
     },
     {
+      method: 'gitRepository',
+      path: '/sidebar/api/git/repository',
+      handler: async (args) => ({ initialized: await git.isRepository(sessionCwdOf(ctx, args.sessionId, args.cwd)) }),
+    },
+    {
+      method: 'gitInit',
+      path: '/sidebar/api/git/init',
+      handler: async (args) => {
+        await git.initRepository(sessionCwdOf(ctx, args.sessionId, args.cwd))
+        return { initialized: true }
+      },
+    },
+    {
       method: 'gitBranch',
       path: '/sidebar/api/git/branch',
       handler: async (args) => ({ branch: await git.branch(sessionCwdOf(ctx, args.sessionId, args.cwd)) }),

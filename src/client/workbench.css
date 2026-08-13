@@ -14,6 +14,12 @@
   --uwb-green: var(--dsw-alias-state-success-primary, #16a36a);
   --uwb-red: var(--dsw-alias-state-error-primary, #e14b4b);
   --uwb-amber: var(--dsw-alias-state-warning-primary, #b7791f);
+  /* OpenCode diff palette: packages/ui/src/styles/theme.css. */
+  --uwb-diff-add-bg: light-dark(#e3fae1, #1a2919);
+  --uwb-diff-add-text: light-dark(#3a8437, #9bcd97);
+  --uwb-diff-del-bg: light-dark(#feefeb, #42120b);
+  --uwb-diff-del-text: light-dark(#ed4831, #fc533a);
+  --uwb-diff-modified-text: light-dark(#ff8c00, #ffba92);
   --uwb-code-font: var(--ds-font-family-code, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace);
 }
 
@@ -248,7 +254,11 @@ body.uwb-is-resizing, body.uwb-is-resizing * { cursor: col-resize !important; us
 .uwb-err { color: var(--uwb-red); }
 .uwb-empty-state { display: flex; width: 100%; min-height: 220px; align-items: center; justify-content: center; flex-direction: column; gap: 7px; padding: 24px; color: var(--uwb-muted); text-align: center; }
 .uwb-empty-state strong { color: var(--uwb-text); font-size: 13px; font-weight: 600; }
-.uwb-empty-state > span:last-child { color: var(--uwb-faint); font-size: 11px; }
+.uwb-empty-detail { color: var(--uwb-faint); font-size: 11px; }
+.uwb-empty-actions { display: flex; align-items: center; flex-direction: column; gap: 7px; }
+.uwb-empty-action { margin-top: 5px; padding: 5px 10px; color: var(--uwb-text); background: transparent; border: 1px solid var(--uwb-border); border-radius: 7px; cursor: pointer; font: inherit; font-size: 12px; }
+.uwb-empty-action:hover { background: var(--uwb-hover); }
+.uwb-empty-action:disabled { cursor: default; opacity: .6; }
 .uwb-empty-icon { display: grid; place-items: center; width: 42px; height: 42px; margin-bottom: 3px; color: var(--uwb-accent); background: var(--uwb-active); border-radius: 12px; }
 
 .uwb-review { display: flex; flex: 1; min-height: 0; overflow: hidden; }
@@ -271,19 +281,19 @@ body.uwb-is-resizing, body.uwb-is-resizing * { cursor: col-resize !important; us
 .uwb-change-tree { flex: 1; overflow: auto; padding: 5px 0 16px; }
 .uwb-change-tree .uwb-empty-state { min-height: 180px; padding-inline: 14px; }
 .uwb-code { order: 5; flex: none; width: 18px; margin-left: auto; font-family: var(--uwb-code-font); font-size: 10px; text-align: right; }
-.uwb-code.A { color: var(--uwb-green); }
-.uwb-code.D { color: var(--uwb-red); }
-.uwb-code.M, .uwb-code.R { color: var(--uwb-amber); }
+.uwb-code.A { color: var(--uwb-diff-add-text); }
+.uwb-code.D { color: var(--uwb-diff-del-text); }
+.uwb-code.M, .uwb-code.R { color: var(--uwb-diff-modified-text); }
 .uwb-code.U { color: var(--uwb-muted); }
 
 .uwb-diff-stats span { padding: 2px 5px; border-radius: 4px; font-family: var(--uwb-code-font); font-size: 11px; }
-.uwb-diff-stats .add { color: var(--uwb-green); background: var(--uwb-surface-2); }
-.uwb-diff-stats .del { color: var(--uwb-red); background: var(--uwb-surface-2); }
+.uwb-diff-stats .add { color: var(--uwb-diff-add-text); background: var(--uwb-diff-add-bg); }
+.uwb-diff-stats .del { color: var(--uwb-diff-del-text); background: var(--uwb-diff-del-bg); }
 .uwb-diff-view { padding-top: 8px; }
-.uwb-diff-add { color: var(--uwb-green); background: color-mix(in srgb, var(--uwb-green) 25%, transparent); }
-.uwb-diff-add .uwb-lc { color: var(--uwb-green); }
-.uwb-diff-del { color: var(--uwb-red); background: color-mix(in srgb, var(--uwb-red) 25%, transparent); }
-.uwb-diff-del .uwb-lc { color: var(--uwb-red); }
+.uwb-diff-add { color: var(--uwb-diff-add-text); background: var(--uwb-diff-add-bg); }
+.uwb-diff-add .uwb-lc { color: var(--uwb-diff-add-text); }
+.uwb-diff-del { color: var(--uwb-diff-del-text); background: var(--uwb-diff-del-bg); }
+.uwb-diff-del .uwb-lc { color: var(--uwb-diff-del-text); }
 .uwb-diff-hunk { margin: 7px 0; color: var(--uwb-accent); background: var(--uwb-active); }
 .uwb-diff-meta { color: var(--uwb-faint); background: var(--uwb-surface); }
 .uwb-loading { display: flex; min-height: 160px; align-items: center; justify-content: center; gap: 9px; color: var(--uwb-muted); }

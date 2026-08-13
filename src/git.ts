@@ -6,11 +6,20 @@
  */
 import { spawn } from 'node:child_process'
 
+class GitCommandError extends Error {
+  readonly exitCode: number | null
+
+  constructor(message: string, exitCode: number | null) {
+    super(message)
+    this.exitCode = exitCode
+  }
+}
+
 function runGit(cwd: string, args: string[], timeoutMs = 30_000, acceptedCodes: readonly number[] = [0]): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const child = spawn('git', ['-C', cwd, '--no-pager', '-c', 'color.ui=false', ...args], {
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' },
+      env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C' },
     })
     let stdout = ''
     let stderr = ''
@@ -27,17 +36,18 @@ function runGit(cwd: string, args: string[], timeoutMs = 30_000, acceptedCodes: 
     child.on('close', (code) => {
       clearTimeout(timer)
       if (code !== null && acceptedCodes.includes(code)) resolve(stdout)
-      else reject(new Error(stderr.trim() || `git exited with ${String(code)}`))
+      else reject(new GitCommandError(stderr.trim() || `git exited with ${String(code)}`, code))
     })
   })
 }
 
-async function isGitRepo(cwd: string): Promise<boolean> {
+export async function isRepository(cwd: string): Promise<boolean> {
   try {
     const out = await runGit(cwd, ['rev-parse', '--is-inside-work-tree'])
     return out.trim() === 'true'
-  } catch {
-    return false
+  } catch (error) {
+    if (error instanceof GitCommandError && error.exitCode === 128 && error.message.toLowerCase().includes('not a git repository')) return false
+    throw error
   }
 }
 
@@ -66,7 +76,7 @@ export async function branches(cwd: string): Promise<string[]> {
 
 /** Working-tree changed files (index + worktree, untracked included). */
 export async function statusFiles(cwd: string): Promise<GitFileEntry[]> {
-  if (!(await isGitRepo(cwd))) return []
+  if (!(await isRepository(cwd))) return []
   const out = await runGit(cwd, ['status', '--porcelain=v1', '--untracked-files=normal'])
   const files: GitFileEntry[] = []
   for (const line of out.split('\n')) {
@@ -85,7 +95,10 @@ export async function statusFiles(cwd: string): Promise<GitFileEntry[]> {
 
 /** Files changed by one commit/ref (default HEAD). */
 export async function lastCommitFiles(cwd: string, ref = 'HEAD'): Promise<GitFileEntry[]> {
-  if (!(await isGitRepo(cwd))) return []
+  if (!(await isRepository(cwd))) return []
+  // `diff-tree HEAD` is invalid in a newly initialized repository. Check the
+  // repository's commit set first, while preserving errors for invalid refs.
+  if (ref === 'HEAD' && (await runGit(cwd, ['rev-parse', '--verify', '--quiet', 'HEAD'], 30_000, [0, 1])).trim() === '') return []
   const out = await runGit(cwd, ['diff-tree', '--no-commit-id', '--name-status', '-r', ref])
   const files: GitFileEntry[] = []
   for (const line of out.split('\n')) {
@@ -100,9 +113,13 @@ export async function lastCommitFiles(cwd: string, ref = 'HEAD'): Promise<GitFil
   return files
 }
 
+export async function initRepository(cwd: string): Promise<void> {
+  await runGit(cwd, ['init'])
+}
+
 /** Complete working-tree diff for one file (index + worktree + untracked). */
 export async function diffFile(cwd: string, file: string, full = false): Promise<string> {
-  const context = full ? '-U999999' : '-U0'
+  const context = full ? '-U999999' : '-U3'
   const untracked = await runGit(cwd, ['ls-files', '--others', '--exclude-standard', '--', file])
   if (untracked.split('\n').some((path) => path.trim() === file)) {
     // `git diff --no-index` returns 1 when differences exist. Git recognizes
@@ -125,5 +142,5 @@ export async function diffFile(cwd: string, file: string, full = false): Promise
 
 /** Diff introduced by one commit/ref for one file. */
 export async function lastFileDiff(cwd: string, file: string, ref = 'HEAD', full = false): Promise<string> {
-  return runGit(cwd, ['show', '--no-ext-diff', '--no-color', full ? '-U999999' : '-U0', '--format=', ref, '--', file])
+  return runGit(cwd, ['show', '--no-ext-diff', '--no-color', full ? '-U999999' : '-U3', '--format=', ref, '--', file])
 }

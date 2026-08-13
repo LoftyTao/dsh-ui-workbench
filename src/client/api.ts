@@ -71,6 +71,17 @@ export async function gitBranch(sessionId: string, cwd: string | null): Promise<
   return r.branch ?? ''
 }
 
+export async function gitRepository(sessionId: string, cwd: string | null): Promise<boolean> {
+  const r = await post<ApiEnvelope & { initialized?: boolean }>('/sidebar/api/git/repository', { sessionId, cwd })
+  if (!r.ok) throw new Error(r.error?.message ?? 'git check failed')
+  return r.initialized === true
+}
+
+export async function gitInit(sessionId: string, cwd: string | null): Promise<void> {
+  const r = await post<ApiEnvelope & { initialized?: boolean }>('/sidebar/api/git/init', { sessionId, cwd })
+  if (!r.ok || r.initialized !== true) throw new Error(r.error?.message ?? 'git init failed')
+}
+
 export async function gitBranches(sessionId: string, cwd: string | null): Promise<string[]> {
   const r = await post<ApiEnvelope & { branches?: string[] }>('/sidebar/api/git/branches', { sessionId, cwd })
   return Array.isArray(r.branches) ? r.branches : []

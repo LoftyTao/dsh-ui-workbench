@@ -307,13 +307,13 @@ function parseDiff(text: string): DiffRow[] {
     ) {
       out.push({ cls: 'meta', old: '', neu: '', text: raw })
     } else if (raw.charAt(0) === '+') {
-      out.push({ cls: 'add', old: '', neu: String(newN), text: raw })
+      out.push({ cls: 'add', old: '', neu: String(newN), text: raw.slice(1) })
       newN += 1
     } else if (raw.charAt(0) === '-') {
-      out.push({ cls: 'del', old: String(oldN), neu: '', text: raw })
+      out.push({ cls: 'del', old: String(oldN), neu: '', text: raw.slice(1) })
       oldN += 1
     } else {
-      out.push({ cls: 'ctx', old: String(oldN), neu: String(newN), text: raw })
+      out.push({ cls: 'ctx', old: String(oldN), neu: String(newN), text: raw.slice(1) })
       oldN += 1
       newN += 1
     }
@@ -332,7 +332,7 @@ function pairDiffRows(rows: DiffRow[]): SplitDiffRow[] {
       continue
     }
     if (row.cls === 'ctx') {
-      paired.push({ kind: 'line', oldLine: row.old, newLine: row.neu, oldText: row.text.slice(1), newText: row.text.slice(1), oldClass: 'ctx', newClass: 'ctx' })
+      paired.push({ kind: 'line', oldLine: row.old, newLine: row.neu, oldText: row.text, newText: row.text, oldClass: 'ctx', newClass: 'ctx' })
       index += 1
       continue
     }
@@ -349,8 +349,8 @@ function pairDiffRows(rows: DiffRow[]): SplitDiffRow[] {
         kind: 'line',
         oldLine: del?.old ?? '',
         newLine: add?.neu ?? '',
-        oldText: del?.text.slice(1) ?? '',
-        newText: add?.text.slice(1) ?? '',
+        oldText: del?.text ?? '',
+        newText: add?.text ?? '',
         oldClass: del === undefined ? 'meta' : 'del',
         newClass: add === undefined ? 'meta' : 'add',
       })
@@ -582,12 +582,13 @@ function FileViewer(props: { sessionId: string; cwd: string | null; file: FsTree
   )
 }
 
-function EmptyState(props: { icon: IconName; title: string; detail: string }): ReactNode {
+function EmptyState(props: { icon: IconName; title: string; detail: string; action?: ReactNode }): ReactNode {
   return (
     <div className="uwb-empty-state">
       <span className="uwb-empty-icon"><Icon name={props.icon} size={22} /></span>
       <strong>{props.title}</strong>
-      <span>{props.detail}</span>
+      <span className="uwb-empty-detail">{props.detail}</span>
+      {props.action === undefined ? null : <div className="uwb-empty-actions">{props.action}</div>}
     </div>
   )
 }
@@ -637,26 +638,74 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
   const [diffErr, setDiffErr] = useState('')
   const [filter, setFilter] = useState('')
   const [sidebarWidth, setSidebarWidth] = useState(238)
+  const [repository, setRepository] = useState<boolean | null>(null)
+  const [creatingRepository, setCreatingRepository] = useState(false)
+  const refreshRequest = useRef(0)
   const diffRequest = useRef(0)
 
   useEffect(() => { setErr(''); setDiffErr('') }, [t])
 
   const refresh = useCallback(async (): Promise<void> => {
+    const request = refreshRequest.current + 1
+    refreshRequest.current = request
     setErr('')
-    const refFor = ref || 'HEAD'
-    const [b, bs, w, l] = await Promise.all([
-      api.gitBranch(props.sessionId, props.cwd),
-      api.gitBranches(props.sessionId, props.cwd),
-      api.gitStatusFiles(props.sessionId, props.cwd),
-      api.gitLastCommitFiles(props.sessionId, props.cwd, refFor),
-    ])
-    setCurrentBranch(b)
-    setBranchList(bs)
-    setWorkFiles(w)
-    setLastFiles(l)
-  }, [props.sessionId, props.cwd, ref])
+    setRepository(null)
+    setCurrentBranch('')
+    setBranchList([])
+    setWorkFiles([])
+    setLastFiles([])
+    setSel(null)
+    setDiffText('')
+    diffRequest.current += 1
+    try {
+      let initialized: boolean | null = null
+      try {
+        initialized = await api.gitRepository(props.sessionId, props.cwd)
+      } catch {
+        // Compatibility with a running Harness host that has not reloaded the
+        // newly added repository-probe route yet. Existing Git routes still
+        // provide the review data until the host is restarted.
+      }
+      if (request !== refreshRequest.current) return
+      if (initialized === false) { setRepository(false); return }
+      const refFor = ref || 'HEAD'
+      const [b, bs, w, l] = await Promise.all([
+        api.gitBranch(props.sessionId, props.cwd),
+        api.gitBranches(props.sessionId, props.cwd),
+        api.gitStatusFiles(props.sessionId, props.cwd),
+        api.gitLastCommitFiles(props.sessionId, props.cwd, refFor),
+      ])
+      if (request !== refreshRequest.current) return
+      setRepository(true)
+      setCurrentBranch(b)
+      setBranchList(bs)
+      setWorkFiles(w)
+      setLastFiles(l)
+    } catch {
+      if (request === refreshRequest.current) {
+        setRepository(true)
+        setErr(t('refreshFailed'))
+      }
+    }
+  }, [props.sessionId, props.cwd, ref, t])
 
-  useEffect(() => { void refresh().catch(() => setErr(t('refreshFailed'))) }, [refresh, t])
+  useEffect(() => {
+    void refresh()
+    return () => { refreshRequest.current += 1; diffRequest.current += 1 }
+  }, [refresh])
+
+  const createRepository = async (): Promise<void> => {
+    setCreatingRepository(true)
+    setErr('')
+    try {
+      await api.gitInit(props.sessionId, props.cwd)
+      await refresh()
+    } catch {
+      setErr(t('createGitFailed'))
+    } finally {
+      setCreatingRepository(false)
+    }
+  }
 
   const loadDiff = useCallback(async (path: string, source: 'work' | 'last', full: boolean): Promise<void> => {
     const request = diffRequest.current + 1
@@ -695,6 +744,21 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
   const effRef = ref || currentBranch || 'HEAD'
   const renderedRowCount = diffLayout === 'split' ? splitRows.length : diffRows.length
   const lazy = useLazyLimit(renderedRowCount, `${sel?.path ?? ''}:${diffLayout}:${contextMode}:${diffText.length}`)
+
+  if (repository === false) {
+    return (
+      <div className="uwb-review">
+        <EmptyState
+          icon="git"
+          title={t('noGit')}
+          detail={t('noGitDetail')}
+          action={<><button className="uwb-empty-action" type="button" disabled={creatingRepository} onClick={() => void createRepository()}>{creatingRepository ? t('creatingGit') : t('createGit')}</button>{err !== '' ? <span className="uwb-err">{err}</span> : null}</>}
+        />
+      </div>
+    )
+  }
+
+  if (repository === null) return <div className="uwb-review"><div className="uwb-loading"><span />{t('loading')}</div></div>
 
   return (
     <div className="uwb-review">
@@ -816,6 +880,7 @@ function Workbench(props: { ctx: Context; ui: ReturnType<typeof createUiStore> }
     let live = true
     if (sessionId == null) { setResolvedCwd(null); return () => { live = false } }
     if (cwd != null) { setResolvedCwd(cwd); return () => { live = false } }
+    setResolvedCwd(null)
     api.sessionCwd(sessionId).then((r) => { if (live) setResolvedCwd(r) })
     return () => { live = false }
   }, [sessionId, cwd])
@@ -876,7 +941,10 @@ function Workbench(props: { ctx: Context; ui: ReturnType<typeof createUiStore> }
 
   const sid = sessionId ?? ''
 
-  useEffect(() => { setFile(null) }, [sessionId])
+  useEffect(() => {
+    setFile(null)
+    props.ui.set({ open: false })
+  }, [sessionId, props.ui])
 
   return (
     <div className={'uwb-root' + (ui.open ? '' : ' uwb-closed')} style={{ width: ui.width }}>
@@ -897,7 +965,7 @@ function Workbench(props: { ctx: Context; ui: ReturnType<typeof createUiStore> }
           <div className="uwb-view"><FileViewer sessionId={sid} cwd={effectiveCwd} file={file} /></div>
         </div>
       ) : (
-        <GitReview sessionId={sid} cwd={effectiveCwd} />
+        <GitReview key={`${sid}:${effectiveCwd ?? ''}`} sessionId={sid} cwd={effectiveCwd} />
       )}
     </div>
   )
