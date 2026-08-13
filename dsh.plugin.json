@@ -1,0 +1,16 @@
+{
+  "id": "dsh-external/dsh-ui-workbench",
+  "version": "0.1.0",
+  "main": "./lib/index.js",
+  "description": "DSH web plugin: right-side workbench panel (file tree / file viewer / git review) with draggable width, coexisting with the official tool-details panel.",
+  "engines": {
+    "dsh": ">=0.0.1"
+  },
+  "contributes": {
+    "tools": [],
+    "skills": []
+  },
+  "client": {
+    "main": "./lib/client.js"
+  }
+}

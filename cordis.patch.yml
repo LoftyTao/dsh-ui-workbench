@@ -1,0 +1,10 @@
+# dsh-ui-workbench bundle patch
+#
+# When installed through the official CLI (`dsh plugin --profile web add
+# dsh-ui-workbench`), the command reconciles `dsh.profile.bundles` against
+# installed packages and, seeing this declaration, appends the plugin row to
+# the bundle stack, then boots by merging this single `insert` exactly like a
+# manual cordis.patch.yml mount line.
+- insert:
+    - id: ui-workbench
+      name: 'dsh-ui-workbench'
