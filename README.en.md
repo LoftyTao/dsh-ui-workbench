@@ -6,7 +6,7 @@ A DeepSeek Harness web plugin. Adds a right-side panel to the conversation page:
 
 ## Screenshot
 
-![English UI screenshot (1920 × 1080)](https://raw.githubusercontent.com/LoftyTao/dsh-ui-workbench/main/assets/workbench-en.png)
+![English UI screenshot (1980 × 1080)](https://raw.githubusercontent.com/LoftyTao/dsh-ui-workbench/main/assets/workbench-en.png)
 
 ## Features
 

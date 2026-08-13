@@ -6,7 +6,7 @@ DeepSeek Harness 的 web 插件。在会话页右侧增加一个面板，提供�
 
 ## 截图
 
-![中文界面截图（1920 × 1080）](https://raw.githubusercontent.com/LoftyTao/dsh-ui-workbench/main/assets/workbench-zh.png)
+![中文界面截图（1980 × 1080）](https://raw.githubusercontent.com/LoftyTao/dsh-ui-workbench/main/assets/workbench-zh.png)
 
 ## 特性
 
