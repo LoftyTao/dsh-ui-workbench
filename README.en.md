@@ -6,7 +6,7 @@
 
 A DeepSeek Harness WebUI plugin. It adds a right-side panel to the conversation page with a file tree, line-numbered file viewer, and Git review for the current session workspace.
 
-![English UI screenshot (1980 × 1080)](https://raw.githubusercontent.com/LoftyTao/dsh-ui-workbench/main/assets/workbench-en.png)
+![WebUI plugin screenshot](https://raw.githubusercontent.com/LoftyTao/dsh-ui-workbench/main/assets/workbench.png)
 
 ## Capabilities
 

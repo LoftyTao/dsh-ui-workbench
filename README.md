@@ -6,7 +6,7 @@
 
 DeepSeek Harness 的 WebUI 插件。在会话页右侧增加一个面板，提供当前会话工作区的文件树、带行号的文件查看器与 Git 审查。
 
-![中文界面截图（1980 × 1080）](https://raw.githubusercontent.com/LoftyTao/dsh-ui-workbench/main/assets/workbench-zh.png)
+![WebUI 插件界面截图](https://raw.githubusercontent.com/LoftyTao/dsh-ui-workbench/main/assets/workbench.png)
 
 ## 功能
 
