@@ -67,7 +67,7 @@
     "prepack": "pnpm typecheck && pnpm build"
   },
   "bin": {
-    "dsh-ui-workbench": "./bin/dsh-ui-workbench.mjs"
+    "dsh-ui-workbench": "bin/dsh-ui-workbench.mjs"
   },
   "publishConfig": {
     "access": "public"
