@@ -12,7 +12,7 @@
  */
 import { isAbsolute, join } from 'node:path'
 import type { Context } from './context-types.ts'
-import { listDirectory, readTextFile } from './fs.ts'
+import { listDirectory, readTextFile, searchFiles } from './fs.ts'
 import * as git from './git.ts'
 import { readJsonBody, requireString, WorkbenchError, writeError, writeJson } from './wire.ts'
 
@@ -44,6 +44,9 @@ interface HandlerArgs {
   path?: string
   file?: string
   ref?: string
+  query?: string
+  full?: boolean
+  offset?: number
 }
 
 export function apply(ctx: Context): void {
@@ -61,6 +64,9 @@ export function apply(ctx: Context): void {
         path: typeof body.path === 'string' ? body.path : undefined,
         file: typeof body.file === 'string' ? body.file : undefined,
         ref: typeof body.ref === 'string' ? body.ref : undefined,
+        query: typeof body.query === 'string' ? body.query : undefined,
+        full: body.full === true,
+        offset: typeof body.offset === 'number' && Number.isSafeInteger(body.offset) && body.offset >= 0 ? body.offset : undefined,
       }
       const value = await fn(args)
       writeJson(res, 200, { ok: true, ...(value as Record<string, unknown>) })
@@ -90,9 +96,17 @@ export function apply(ctx: Context): void {
       handler: async (args) => {
         const root = sessionCwdOf(ctx, args.sessionId, args.cwd)
         const target = childPath(root, requireString(args.path, 'path'))
-        const { content, truncated } = await readTextFile(target)
-        return { path: target, content, truncated }
+        const { content, truncated, nextOffset } = await readTextFile(target, args.offset ?? 0)
+        return { path: target, content, truncated, nextOffset }
       },
+    },
+    {
+      method: 'searchFiles',
+      path: '/sidebar/api/search-files',
+      handler: async (args) => searchFiles(
+        sessionCwdOf(ctx, args.sessionId, args.cwd),
+        requireString(args.query, 'query'),
+      ),
     },
     {
       method: 'gitBranch',
@@ -120,14 +134,14 @@ export function apply(ctx: Context): void {
       method: 'gitDiffFile',
       path: '/sidebar/api/git/diff-file',
       handler: async (args) => ({
-        diff: await git.diffFile(sessionCwdOf(ctx, args.sessionId, args.cwd), requireString(args.file, 'file')),
+        diff: await git.diffFile(sessionCwdOf(ctx, args.sessionId, args.cwd), requireString(args.file, 'file'), args.full),
       }),
     },
     {
       method: 'gitLastFileDiff',
       path: '/sidebar/api/git/last-file-diff',
       handler: async (args) => ({
-        diff: await git.lastFileDiff(sessionCwdOf(ctx, args.sessionId, args.cwd), requireString(args.file, 'file'), args.ref || 'HEAD'),
+        diff: await git.lastFileDiff(sessionCwdOf(ctx, args.sessionId, args.cwd), requireString(args.file, 'file'), args.ref || 'HEAD', args.full),
       }),
     },
   ]

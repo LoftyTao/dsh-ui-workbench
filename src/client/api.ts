@@ -12,6 +12,12 @@ export interface GitFileEntry {
   path: string
 }
 
+export interface FsSearchEntry {
+  name: string
+  path: string
+  relative: string
+}
+
 interface ApiError {
   code: string
   message: string
@@ -44,14 +50,20 @@ export async function listDir(sessionId: string, cwd: string | null, path?: stri
   return { path: r.path ?? (path ?? ''), entries: r.entries }
 }
 
-export async function readFile(sessionId: string, cwd: string | null, path: string): Promise<{ path: string; content: string; truncated: boolean }> {
-  const r = await post<ApiEnvelope & { path?: string; content?: string; truncated?: boolean }>('/sidebar/api/read-file', { sessionId, cwd, path })
+export async function readFile(sessionId: string, cwd: string | null, path: string, offset = 0): Promise<{ path: string; content: string; truncated: boolean; nextOffset: number }> {
+  const r = await post<ApiEnvelope & { path?: string; content?: string; truncated?: boolean; nextOffset?: number }>('/sidebar/api/read-file', { sessionId, cwd, path, offset })
   if (!r.ok) {
     const error = new Error(r.error?.message ?? 'read failed') as Error & { code?: string }
     error.code = r.error?.code
     throw error
   }
-  return { path: r.path ?? path, content: r.content ?? '', truncated: r.truncated ?? false }
+  return { path: r.path ?? path, content: r.content ?? '', truncated: r.truncated ?? false, nextOffset: r.nextOffset ?? offset }
+}
+
+export async function searchFiles(sessionId: string, cwd: string | null, query: string): Promise<{ entries: FsSearchEntry[]; truncated: boolean }> {
+  const r = await post<ApiEnvelope & { entries?: FsSearchEntry[]; truncated?: boolean }>('/sidebar/api/search-files', { sessionId, cwd, query })
+  if (!r.ok) throw new Error(r.error?.message ?? 'search failed')
+  return { entries: Array.isArray(r.entries) ? r.entries : [], truncated: r.truncated === true }
 }
 
 export async function gitBranch(sessionId: string, cwd: string | null): Promise<string> {
@@ -74,12 +86,12 @@ export async function gitLastCommitFiles(sessionId: string, cwd: string | null, 
   return Array.isArray(r.files) ? r.files : []
 }
 
-export async function gitDiffFile(sessionId: string, cwd: string | null, file: string): Promise<string> {
-  const r = await post<ApiEnvelope & { diff?: string }>('/sidebar/api/git/diff-file', { sessionId, cwd, file })
+export async function gitDiffFile(sessionId: string, cwd: string | null, file: string, full = false): Promise<string> {
+  const r = await post<ApiEnvelope & { diff?: string }>('/sidebar/api/git/diff-file', { sessionId, cwd, file, full })
   return r.diff ?? ''
 }
 
-export async function gitLastFileDiff(sessionId: string, cwd: string | null, file: string, ref: string): Promise<string> {
-  const r = await post<ApiEnvelope & { diff?: string }>('/sidebar/api/git/last-file-diff', { sessionId, cwd, file, ref })
+export async function gitLastFileDiff(sessionId: string, cwd: string | null, file: string, ref: string, full = false): Promise<string> {
+  const r = await post<ApiEnvelope & { diff?: string }>('/sidebar/api/git/last-file-diff', { sessionId, cwd, file, ref, full })
   return r.diff ?? ''
 }

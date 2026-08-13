@@ -101,28 +101,29 @@ export async function lastCommitFiles(cwd: string, ref = 'HEAD'): Promise<GitFil
 }
 
 /** Complete working-tree diff for one file (index + worktree + untracked). */
-export async function diffFile(cwd: string, file: string): Promise<string> {
+export async function diffFile(cwd: string, file: string, full = false): Promise<string> {
+  const context = full ? '-U999999' : '-U0'
   const untracked = await runGit(cwd, ['ls-files', '--others', '--exclude-standard', '--', file])
   if (untracked.split('\n').some((path) => path.trim() === file)) {
     // `git diff --no-index` returns 1 when differences exist. Git recognizes
     // /dev/null as the empty side on every supported platform, including Git
     // for Windows, and emits a normal new-file patch for the review parser.
-    return runGit(cwd, ['diff', '--no-index', '--no-ext-diff', '--no-color', '-U3', '--', '/dev/null', file], 30_000, [0, 1])
+    return runGit(cwd, ['diff', '--no-index', '--no-ext-diff', '--no-color', context, '--', '/dev/null', file], 30_000, [0, 1])
   }
 
   try {
     await runGit(cwd, ['rev-parse', '--verify', 'HEAD'])
-    return runGit(cwd, ['diff', 'HEAD', '--no-ext-diff', '--no-color', '-U3', '--', file])
+    return runGit(cwd, ['diff', 'HEAD', '--no-ext-diff', '--no-color', context, '--', file])
   } catch {
     // An unborn repository has no HEAD. `--cached` still shows newly staged
     // files; fall back to the ordinary worktree diff when the index is empty.
-    const staged = await runGit(cwd, ['diff', '--cached', '--no-ext-diff', '--no-color', '-U3', '--', file])
+    const staged = await runGit(cwd, ['diff', '--cached', '--no-ext-diff', '--no-color', context, '--', file])
     if (staged !== '') return staged
-    return runGit(cwd, ['diff', '--no-ext-diff', '--no-color', '-U3', '--', file])
+    return runGit(cwd, ['diff', '--no-ext-diff', '--no-color', context, '--', file])
   }
 }
 
 /** Diff introduced by one commit/ref for one file. */
-export async function lastFileDiff(cwd: string, file: string, ref = 'HEAD'): Promise<string> {
-  return runGit(cwd, ['show', '--no-ext-diff', '--no-color', '--format=', ref, '--', file])
+export async function lastFileDiff(cwd: string, file: string, ref = 'HEAD', full = false): Promise<string> {
+  return runGit(cwd, ['show', '--no-ext-diff', '--no-color', full ? '-U999999' : '-U0', '--format=', ref, '--', file])
 }
