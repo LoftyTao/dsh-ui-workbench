@@ -8,6 +8,19 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore, useState, type ReactNode, type RefObject, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import Prism from 'prismjs'
+import 'prismjs/components/prism-typescript'
+import 'prismjs/components/prism-jsx'
+import 'prismjs/components/prism-tsx'
+import 'prismjs/components/prism-json'
+import 'prismjs/components/prism-css'
+import 'prismjs/components/prism-scss'
+import 'prismjs/components/prism-python'
+import 'prismjs/components/prism-bash'
+import 'prismjs/components/prism-powershell'
+import 'prismjs/components/prism-markdown'
+import 'prismjs/components/prism-yaml'
+import 'prismjs/components/prism-sql'
 import type { Context } from '../context-types.ts'
 import * as api from './api.ts'
 import './workbench.css'
@@ -61,6 +74,65 @@ function languageOf(path: string): string {
     sh: 'Shell', ps1: 'PowerShell', sql: 'SQL', toml: 'TOML', vue: 'Vue', svelte: 'Svelte',
   }
   return languages[ext] ?? (ext ? ext.toUpperCase() : 'Text')
+}
+
+function prismLanguage(path: string): string | null {
+  const ext = path.split('.').pop()?.toLowerCase() ?? ''
+  const languages: Record<string, string> = {
+    ts: 'typescript', tsx: 'tsx', js: 'javascript', jsx: 'jsx', json: 'json', css: 'css', scss: 'scss',
+    html: 'markup', htm: 'markup', xml: 'markup', svg: 'markup', md: 'markdown', py: 'python', sh: 'bash',
+    bash: 'bash', ps1: 'powershell', yml: 'yaml', yaml: 'yaml', sql: 'sql',
+  }
+  return languages[ext] ?? null
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+function highlightedLines(text: string, language: string | null): string[] | null {
+  if (language === null) return null
+  const grammar = Prism.languages[language]
+  if (grammar === undefined) return null
+  const lines = ['']
+  const appendText = (value: string, classes: string[]): void => {
+    const parts = value.split('\n')
+    parts.forEach((part, index) => {
+      const escaped = escapeHtml(part)
+      const html = classes.length > 0 && escaped !== '' ? `<span class="${classes.join(' ')}">${escaped}</span>` : escaped
+      lines[lines.length - 1] = (lines[lines.length - 1] ?? '') + html
+      if (index < parts.length - 1) lines.push('')
+    })
+  }
+  const visit = (value: string | Prism.Token | Array<string | Prism.Token>, classes: string[] = []): void => {
+    if (typeof value === 'string') { appendText(value, classes); return }
+    if (Array.isArray(value)) { value.forEach((child) => visit(child, classes)); return }
+    const alias = Array.isArray(value.alias) ? value.alias : value.alias === undefined ? [] : [value.alias]
+    visit(value.content, [...classes, 'token', value.type, ...alias])
+  }
+  visit(Prism.tokenize(text, grammar))
+  if (lines.length > 0 && lines[lines.length - 1] === '' && text.endsWith('\n')) lines.pop()
+  return lines
+}
+
+function FileTypeIcon(props: { name: string; size?: number }): ReactNode {
+  const ext = props.name.split('.').pop()?.toLowerCase() ?? ''
+  const known: Record<string, { kind: string; label: string }> = {
+    ts: { kind: 'ts', label: 'TS' }, tsx: { kind: 'tsx', label: 'TX' }, js: { kind: 'js', label: 'JS' }, jsx: { kind: 'jsx', label: 'JX' },
+    json: { kind: 'json', label: '{}' }, css: { kind: 'css', label: '#' }, scss: { kind: 'scss', label: 'S' }, html: { kind: 'html', label: '<>' },
+    md: { kind: 'md', label: 'M' }, py: { kind: 'py', label: 'PY' }, rs: { kind: 'rs', label: 'RS' }, go: { kind: 'go', label: 'GO' },
+    vue: { kind: 'vue', label: 'V' }, svelte: { kind: 'svelte', label: 'S' }, yml: { kind: 'yaml', label: 'Y' }, yaml: { kind: 'yaml', label: 'Y' },
+    svg: { kind: 'svg', label: '◇' }, png: { kind: 'image', label: '●' }, jpg: { kind: 'image', label: '●' }, jpeg: { kind: 'image', label: '●' },
+  }
+  const type = known[ext] ?? { kind: 'file', label: '' }
+  const size = props.size ?? 16
+  return (
+    <svg className="uwb-file-type-icon" data-kind={type.kind} width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
+      <path className="uwb-file-sheet" d="M3.25 1.5h5.6l3.9 3.9v8.1a1 1 0 0 1-1 1h-8.5a1 1 0 0 1-1-1v-11a1 1 0 0 1 1-1Z" />
+      <path className="uwb-file-fold" d="M8.75 1.75v3.9h3.9" />
+      {type.label !== '' ? <text x="7.5" y="11.8" textAnchor="middle">{type.label}</text> : null}
+    </svg>
+  )
 }
 
 function useLazyLimit(total: number, resetKey: string, batch = 400): { limit: number; sentinel: RefObject<HTMLDivElement> } {
@@ -326,7 +398,7 @@ function FsTreeNode(props: {
     <div>
       <div className={'uwb-row' + (props.entry.dir ? ' dir' : ' file') + (sel ? ' sel' : '')} onClick={() => void toggle()}>
         <span className={'uwb-chevron' + (expanded ? ' expanded' : '')}>{props.entry.dir ? <Icon name="chevron" size={13} /> : null}</span>
-        <Icon name={props.entry.dir ? 'folder' : 'file'} size={15} className="uwb-file-icon" />
+        {props.entry.dir ? <Icon name="folder" size={15} className="uwb-file-icon" /> : <FileTypeIcon name={props.entry.name} size={16} />}
         <span className="uwb-row-label">{props.entry.name}</span>
       </div>
       {expanded ? (
@@ -343,21 +415,18 @@ function FsTreeNode(props: {
 
 function FileTree(props: { sessionId: string; cwd: string | null; onOpen: (entry: FsTreeEntry) => void; selectedPath: string | null }): ReactNode {
   const [rootEntries, setRootEntries] = useState<FsTreeEntry[]>([])
-  const [rootPath, setRootPath] = useState('')
   const [err, setErr] = useState('')
 
   useEffect(() => {
     let live = true
     if (props.cwd == null) {
       setRootEntries([])
-      setRootPath('')
       setErr('未找到当前工作区目录')
       return () => { live = false }
     }
     setErr('')
     api.listDir(props.sessionId, props.cwd).then((r) => {
       if (!live) return
-      setRootPath(r.path)
       setRootEntries(buildDirTree(r.entries, r.path))
     }).catch((e: Error) => { if (live) setErr(e.message) })
     return () => { live = false }
@@ -365,11 +434,6 @@ function FileTree(props: { sessionId: string; cwd: string | null; onOpen: (entry
 
   return (
     <div className="uwb-tree-content">
-      <div className="uwb-tree-title">
-        <span>工作区</span>
-        <span className="uwb-tree-count">{rootEntries.length}</span>
-      </div>
-      <p className="uwb-path uwb-root-path" title={rootPath || props.cwd || ''}>{fileName(rootPath || props.cwd || '') || '未连接'}</p>
       {err ? <div className="uwb-empty uwb-err">{err}</div>
         : rootEntries.map((c, i) => (
           <FsTreeNode key={i} entry={c} onOpen={props.onOpen} selectedPath={props.selectedPath} sessionId={props.sessionId} cwd={props.cwd} />
@@ -433,7 +497,7 @@ function WorkspaceSearch(props: {
               props.onOpen({ name: result.name, path: result.path, dir: false })
               setQuery('')
             }}>
-              <Icon name="file" size={15} />
+              <FileTypeIcon name={result.name} size={16} />
               <span><strong>{result.name}</strong><small>{result.relative}</small></span>
             </button>
           ))}
@@ -450,6 +514,8 @@ function FileViewer(props: { sessionId: string; cwd: string | null; file: FsTree
   const [loadingMore, setLoadingMore] = useState(false)
   const moreSentinel = useRef<HTMLDivElement>(null)
   const lines = useMemo(() => splitLines(content?.text ?? ''), [content])
+  const language = useMemo(() => prismLanguage(content?.path ?? ''), [content?.path])
+  const highlighted = useMemo(() => highlightedLines(content?.text ?? '', language), [content?.text, language])
   const lazy = useLazyLimit(lines.length, content?.path ?? '')
 
   useEffect(() => {
@@ -499,7 +565,7 @@ function FileViewer(props: { sessionId: string; cwd: string | null; file: FsTree
     <div className="uwb-document">
       <div className="uwb-file-head">
         <div className="uwb-file-ident">
-          <Icon name="file" size={16} />
+          <FileTypeIcon name={content.path} size={17} />
           <div><strong>{fileName(content.path)}</strong><span>{parentPath(content.path)}</span></div>
         </div>
         <div className="uwb-file-actions">
@@ -508,11 +574,11 @@ function FileViewer(props: { sessionId: string; cwd: string | null; file: FsTree
         </div>
       </div>
       {content.truncated ? <div className="uwb-notice">文件较大，内容将在滚动时分块加载</div> : null}
-      <div className="uwb-code-view">
+      <div className="uwb-code-view uwb-wrap">
         {lines.slice(0, lazy.limit).map((ln, i) => (
           <div className="uwb-line" key={i}>
             <span className="uwb-ln">{String(i + 1)}</span>
-            <span className="uwb-lc">{ln || ' '}</span>
+            <span className="uwb-lc uwb-highlight">{highlighted === null ? (ln || ' ') : <span dangerouslySetInnerHTML={{ __html: highlighted[i] || ' ' }} />}</span>
           </div>
         ))}
         {lazy.limit < lines.length ? <div ref={lazy.sentinel} className="uwb-lazy-status">已显示 {lazy.limit} / {lines.length} 行 · 向下滚动继续加载</div> : null}
@@ -545,7 +611,7 @@ function GitTreeNodeView(props: { node: GitTreeEntry; onOpen: (node: GitTreeEntr
         onClick={() => { if (isLeaf) props.onOpen(props.node); else setExpanded(!expanded) }}
       >
         <span className={'uwb-chevron' + (expanded ? ' expanded' : '')}>{isLeaf ? null : <Icon name="chevron" size={13} />}</span>
-        <Icon name={isLeaf ? 'file' : 'folder'} size={15} className="uwb-file-icon" />
+        {isLeaf ? <FileTypeIcon name={props.node.name} size={16} /> : <Icon name="folder" size={15} className="uwb-file-icon" />}
         {isLeaf ? <span className={'uwb-code ' + codeClass}>{String(props.node.code ?? '?').replace(/\s/g, '') || '?'}</span> : null}
         <span className="uwb-row-label">{props.node.name}</span>
       </div>
@@ -673,7 +739,7 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
               <div className="uwb-document-head">
                 <div className="uwb-file-head">
                   <div className="uwb-file-ident">
-                    <Icon name="file" size={16} />
+                    <FileTypeIcon name={sel.path} size={17} />
                     <div><strong>{fileName(sel.path)}</strong><span>{parentPath(sel.path)}</span></div>
                   </div>
                   <div className="uwb-diff-stats"><span className="add">+{additions}</span><span className="del">−{deletions}</span></div>
@@ -699,7 +765,7 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
               {loading ? <div className="uwb-loading"><span />读取差异…</div>
                 : diffRows.length === 0 ? <EmptyState icon="git" title="没有可显示的差异" detail="文件可能仅存在于暂存区或尚未被 Git 跟踪" />
                   : diffLayout === 'unified' ? (
-                    <div className="uwb-code-view uwb-diff-view">{diffRows.slice(0, lazy.limit).map((r, i) => (
+                    <div className={'uwb-code-view uwb-diff-view' + (contextMode === 'all' ? ' uwb-wrap' : '')}>{diffRows.slice(0, lazy.limit).map((r, i) => (
                       <div className={'uwb-line uwb-diff-' + r.cls} key={i}>
                         <span className="uwb-ln">{r.old}</span>
                         <span className="uwb-ln">{r.neu}</span>
@@ -708,7 +774,7 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
                     ))}
                     {lazy.limit < diffRows.length ? <div ref={lazy.sentinel} className="uwb-lazy-status">已显示 {lazy.limit} / {diffRows.length} 行 · 向下滚动继续加载</div> : null}</div>
                   ) : (
-                    <div className="uwb-split-view">{splitRows.slice(0, lazy.limit).map((row, index) => row.kind === 'wide' ? (
+                    <div className={'uwb-split-view' + (contextMode === 'all' ? ' uwb-wrap' : '')}>{splitRows.slice(0, lazy.limit).map((row, index) => row.kind === 'wide' ? (
                       <div className={'uwb-split-wide uwb-diff-' + row.oldClass} key={index}>{row.oldText || ' '}</div>
                     ) : (
                       <div className="uwb-split-row" key={index}>
@@ -777,17 +843,16 @@ function Workbench(props: { ctx: Context; ui: ReturnType<typeof createUiStore> }
     <div className={'uwb-root' + (ui.open ? '' : ' uwb-closed')} style={{ width: ui.width }}>
       <ResizeHandle className="uwb-resize" label="调整工作台宽度" value={ui.width} direction={-1} min={MIN_WIDTH} max={Math.min(MAX_WIDTH, window.innerWidth)} onChange={(width) => props.ui.set({ width })} />
       <div className="uwb-head">
-        <div className="uwb-brand"><span className="uwb-brand-mark"><Icon name="files" size={15} /></span><span>工作台</span></div>
         <div className="uwb-tabs" role="tablist" aria-label="工作台视图">
           <button role="tab" aria-selected={ui.tab === 'tree'} className={'uwb-tab' + (ui.tab === 'tree' ? ' on' : '')} onClick={() => props.ui.set({ tab: 'tree' })}><Icon name="files" size={14} />文件</button>
           <button role="tab" aria-selected={ui.tab === 'git'} className={'uwb-tab' + (ui.tab === 'git' ? ' on' : '')} onClick={() => props.ui.set({ tab: 'git' })}><Icon name="git" size={14} />审查</button>
         </div>
         <button className="uwb-close uwb-icon-btn" onClick={() => props.ui.set({ open: false })} title="关闭 (Esc)" aria-label="关闭工作台"><Icon name="close" size={16} /></button>
       </div>
-      {ui.tab === 'tree' ? <WorkspaceSearch sessionId={sid} cwd={effectiveCwd} onOpen={setFile} /> : null}
       {ui.tab === 'tree' ? (
         <div className="uwb-body">
           <div className="uwb-tree" style={{ width: treeW }}>
+            <WorkspaceSearch sessionId={sid} cwd={effectiveCwd} onOpen={setFile} />
             <FileTree sessionId={sid} cwd={effectiveCwd} onOpen={setFile} selectedPath={file?.path ?? null} />
           </div>
           <ResizeHandle className="uwb-tree-resize" label="调整文件树宽度" value={treeW} direction={1} min={TREE_MIN} max={Math.min(TREE_MAX, ui.width - 160)} onChange={setTreeW} />

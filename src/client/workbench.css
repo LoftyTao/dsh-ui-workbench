@@ -18,8 +18,9 @@
 }
 
 #root {
+  width: calc(100% - var(--uwb-width, 0px));
   margin-right: var(--uwb-width, 0px);
-  transition: margin-right var(--ds-transition-duration-slow, 200ms) cubic-bezier(.2, .8, .2, 1);
+  transition: width var(--ds-transition-duration-slow, 200ms) cubic-bezier(.2, .8, .2, 1), margin-right var(--ds-transition-duration-slow, 200ms) cubic-bezier(.2, .8, .2, 1);
 }
 
 .uwb-root, .uwb-root * { box-sizing: border-box; }
@@ -85,9 +86,7 @@ body.uwb-is-resizing, body.uwb-is-resizing * { cursor: col-resize !important; us
   user-select: none;
 }
 
-.uwb-brand { display: flex; align-items: center; gap: 8px; font-weight: 650; letter-spacing: -.01em; }
-.uwb-brand-mark { display: grid; place-items: center; width: 25px; height: 25px; color: var(--uwb-text); }
-.uwb-tabs { display: flex; align-items: center; gap: 2px; padding: 3px; margin-left: auto; background: var(--uwb-bg); border: 1px solid var(--uwb-border); border-radius: 8px; }
+.uwb-tabs { display: flex; align-items: center; gap: 2px; padding: 3px; background: var(--uwb-bg); border: 1px solid var(--uwb-border); border-radius: 8px; }
 
 .uwb-tab {
   display: flex;
@@ -122,15 +121,15 @@ body.uwb-is-resizing, body.uwb-is-resizing * { cursor: col-resize !important; us
 }
 
 .uwb-icon-btn:hover { color: var(--uwb-text); background: var(--uwb-hover); }
-.uwb-close { margin-left: 0; }
+.uwb-close { margin-left: auto; }
 
 .uwb-search {
-  position: relative;
+  position: sticky;
+  top: 0;
   z-index: 10;
   flex: none;
-  padding: 6px 12px;
+  padding: 8px 8px 6px;
   background: var(--uwb-surface);
-  border-bottom: 1px solid var(--uwb-border-soft);
 }
 
 .uwb-search-box {
@@ -151,7 +150,7 @@ body.uwb-is-resizing, body.uwb-is-resizing * { cursor: col-resize !important; us
 .uwb-search-clear { display: grid; flex: none; place-items: center; width: 24px; height: 24px; padding: 0; color: var(--uwb-muted); background: transparent; border: 0; border-radius: 50%; cursor: pointer; }
 .uwb-search-clear:hover { background: var(--uwb-hover); }
 .uwb-search-spinner { flex: none; width: 13px; height: 13px; border: 2px solid var(--uwb-border); border-top-color: var(--uwb-accent); border-radius: 50%; animation: uwb-spin .7s linear infinite; }
-.uwb-search-results { position: absolute; top: calc(100% - 2px); right: 12px; left: 12px; max-height: min(420px, 55vh); padding: 6px; overflow-y: auto; background: var(--uwb-surface); border: 1px solid var(--uwb-border); border-radius: 8px; }
+.uwb-search-results { position: absolute; top: calc(100% - 2px); right: 8px; left: 8px; max-height: min(420px, 55vh); padding: 6px; overflow-y: auto; background: var(--uwb-surface); border: 1px solid var(--uwb-border); border-radius: 8px; }
 .uwb-search-result { display: flex; width: 100%; min-height: 48px; align-items: center; gap: 8px; padding: 5px 8px; color: var(--uwb-text); background: transparent; border: 0; border-radius: 8px; cursor: pointer; text-align: left; }
 .uwb-search-result:hover { background: var(--uwb-hover); }
 .uwb-search-result > svg { flex: none; color: var(--uwb-faint); }
@@ -163,7 +162,7 @@ body.uwb-is-resizing, body.uwb-is-resizing * { cursor: col-resize !important; us
 
 .uwb-body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
 .uwb-tree { flex: none; min-width: 120px; padding: 0; overflow: auto; background: var(--uwb-surface); border-right: 1px solid var(--uwb-border); }
-.uwb-tree-content { padding-bottom: 16px; }
+.uwb-tree-content { padding: 2px 0 16px; }
 
 .uwb-tree-title, .uwb-changes-head {
   display: flex;
@@ -199,6 +198,23 @@ body.uwb-is-resizing, body.uwb-is-resizing * { cursor: col-resize !important; us
 .uwb-row.file.sel .uwb-file-icon { color: var(--uwb-accent); }
 .uwb-row-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .uwb-file-icon { flex: none; color: var(--uwb-faint); }
+.uwb-file-type-icon { flex: none; overflow: visible; color: var(--uwb-faint); }
+.uwb-file-sheet { fill: color-mix(in srgb, currentColor 8%, transparent); stroke: currentColor; stroke-width: 1; }
+.uwb-file-fold { fill: none; stroke: currentColor; stroke-width: 1; }
+.uwb-file-type-icon text { fill: currentColor; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 4.6px; font-weight: 800; letter-spacing: -.2px; }
+.uwb-file-type-icon[data-kind='ts'], .uwb-file-type-icon[data-kind='tsx'] { color: #3178c6; }
+.uwb-file-type-icon[data-kind='js'], .uwb-file-type-icon[data-kind='jsx'] { color: #c99a00; }
+.uwb-file-type-icon[data-kind='json'] { color: #a67c00; }
+.uwb-file-type-icon[data-kind='css'], .uwb-file-type-icon[data-kind='scss'] { color: #8b5cf6; }
+.uwb-file-type-icon[data-kind='html'] { color: #e45b2b; }
+.uwb-file-type-icon[data-kind='md'] { color: #4f6475; }
+.uwb-file-type-icon[data-kind='py'] { color: #3776ab; }
+.uwb-file-type-icon[data-kind='rs'] { color: #b45309; }
+.uwb-file-type-icon[data-kind='go'] { color: #00a7d0; }
+.uwb-file-type-icon[data-kind='vue'] { color: #42b883; }
+.uwb-file-type-icon[data-kind='svelte'] { color: #ff3e00; }
+.uwb-file-type-icon[data-kind='yaml'] { color: #cb171e; }
+.uwb-file-type-icon[data-kind='svg'], .uwb-file-type-icon[data-kind='image'] { color: #d97706; }
 .uwb-chevron { display: grid; flex: none; place-items: center; width: 13px; height: 18px; color: var(--uwb-faint); transition: transform 120ms ease; }
 .uwb-chevron.expanded { transform: rotate(90deg); }
 .uwb-children { margin-left: 12px; padding-left: 2px; border-left: 1px solid var(--uwb-border); }
@@ -243,6 +259,9 @@ body.uwb-is-resizing, body.uwb-is-resizing * { cursor: col-resize !important; us
 .uwb-line:hover { background: var(--uwb-hover); }
 .uwb-ln { flex: none; width: 48px; padding: 0 10px 0 6px; color: var(--uwb-faint); text-align: right; user-select: none; }
 .uwb-lc { flex: 1; min-width: 0; padding: 0 20px 0 10px; border-left: 1px solid var(--uwb-border); white-space: pre; }
+.uwb-wrap { min-width: 100%; }
+.uwb-code-view.uwb-wrap .uwb-line { min-width: 0; }
+.uwb-code-view.uwb-wrap .uwb-lc { white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
 .uwb-path { margin: 0; color: var(--uwb-faint); font-family: var(--uwb-code-font); font-size: 10px; word-break: break-all; }
 
 .uwb-notice { margin: 10px 14px 0; padding: 8px 10px; color: var(--uwb-amber); background: var(--uwb-surface-2); border: 1px solid var(--uwb-border); border-radius: 8px; font-size: 11px; }
@@ -282,9 +301,9 @@ body.uwb-is-resizing, body.uwb-is-resizing * { cursor: col-resize !important; us
 .uwb-diff-stats .add { color: var(--uwb-green); background: var(--uwb-surface-2); }
 .uwb-diff-stats .del { color: var(--uwb-red); background: var(--uwb-surface-2); }
 .uwb-diff-view { padding-top: 8px; }
-.uwb-diff-add { color: var(--uwb-green); background: var(--dsw-alias-state-success-secondary, transparent); }
+.uwb-diff-add { color: var(--uwb-green); background: color-mix(in srgb, var(--uwb-green) 25%, transparent); }
 .uwb-diff-add .uwb-lc { color: var(--uwb-green); }
-.uwb-diff-del { color: var(--uwb-red); background: var(--dsw-alias-state-error-secondary, transparent); }
+.uwb-diff-del { color: var(--uwb-red); background: color-mix(in srgb, var(--uwb-red) 25%, transparent); }
 .uwb-diff-del .uwb-lc { color: var(--uwb-red); }
 .uwb-diff-hunk { margin: 7px 0; color: var(--uwb-accent); background: var(--uwb-active); }
 .uwb-diff-meta { color: var(--uwb-faint); background: var(--uwb-surface); }
@@ -299,14 +318,31 @@ body.uwb-is-resizing, body.uwb-is-resizing * { cursor: col-resize !important; us
 .uwb-segment button.on { color: var(--uwb-text); background: var(--uwb-hover); }
 
 .uwb-split-view { min-width: 720px; padding: 8px 0 32px; font-family: var(--uwb-code-font); font-size: 12px; line-height: 20px; }
+.uwb-split-view.uwb-wrap { min-width: 100%; }
 .uwb-split-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 20px; }
 .uwb-split-side { display: flex; min-width: 0; border-right: 1px solid var(--uwb-border); }
 .uwb-split-side:last-child { border-right: 0; }
 .uwb-split-side .uwb-ln { width: 48px; }
 .uwb-split-side .uwb-lc { min-width: max-content; white-space: pre; }
+.uwb-split-view.uwb-wrap .uwb-split-side .uwb-lc { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
 .uwb-split-wide { min-height: 20px; padding: 0 12px 0 58px; white-space: pre; }
+.uwb-split-view.uwb-wrap .uwb-split-wide { white-space: pre-wrap; overflow-wrap: anywhere; }
 .uwb-diff-empty { color: transparent; background: var(--uwb-surface-2); }
 .uwb-lazy-status { min-height: 36px; padding: 9px 16px; color: var(--uwb-faint); background: var(--uwb-surface); border-top: 1px solid var(--uwb-border-soft); font-family: var(--ds-font-family, inherit); font-size: 11px; text-align: center; }
+
+/* Prism tokens intentionally resolve through the Harness palette so syntax
+   remains legible in both themes without introducing an editor surface. */
+.uwb-highlight .token.comment, .uwb-highlight .token.prolog, .uwb-highlight .token.doctype, .uwb-highlight .token.cdata { color: var(--uwb-faint); font-style: italic; }
+.uwb-highlight .token.punctuation { color: var(--uwb-muted); }
+.uwb-highlight .token.property, .uwb-highlight .token.tag, .uwb-highlight .token.constant, .uwb-highlight .token.symbol, .uwb-highlight .token.deleted { color: var(--uwb-red); }
+.uwb-highlight .token.boolean, .uwb-highlight .token.number { color: #b86b2c; }
+.uwb-highlight .token.selector, .uwb-highlight .token.attr-name, .uwb-highlight .token.string, .uwb-highlight .token.char, .uwb-highlight .token.builtin, .uwb-highlight .token.inserted { color: var(--uwb-green); }
+.uwb-highlight .token.operator, .uwb-highlight .token.entity, .uwb-highlight .token.url, .uwb-highlight .language-css .token.string, .uwb-highlight .style .token.string { color: #8b5cf6; }
+.uwb-highlight .token.atrule, .uwb-highlight .token.attr-value, .uwb-highlight .token.keyword { color: #7c5ce7; }
+.uwb-highlight .token.function, .uwb-highlight .token.class-name { color: #2f6fca; }
+.uwb-highlight .token.regex, .uwb-highlight .token.important, .uwb-highlight .token.variable { color: #b7791f; }
+.uwb-highlight .token.bold, .uwb-highlight .token.important { font-weight: 650; }
+.uwb-highlight .token.italic { font-style: italic; }
 
 .uwb-openbtn {
   display: flex;
@@ -326,8 +362,8 @@ body.uwb-is-resizing, body.uwb-is-resizing * { cursor: col-resize !important; us
 .uwb-openbtn:hover { background: var(--uwb-hover); }
 .uwb-openbtn.on { color: var(--uwb-accent); background: var(--uwb-active); border-color: var(--uwb-accent); }
 
-@media (max-width: 900px) {
-  #root { margin-right: 0 !important; }
+@media (max-width: 1100px) {
+  #root { width: 100% !important; margin-right: 0 !important; }
   .uwb-root { width: min(100vw, 720px) !important; }
 }
 
