@@ -54,7 +54,8 @@
     "lib/types/**/*.d.ts",
     "bin/dsh-ui-workbench.mjs",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "README.en.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && tsdown",

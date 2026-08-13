@@ -146,7 +146,7 @@ type Locale = keyof typeof messages
 type Translate = (key: MessageKey, values?: Record<string, string | number>) => string
 
 function localeFromDocument(): Locale {
-  const harnessHeader = document.querySelector('[data-slot="conversation.session.header"] > header')
+  const harnessHeader = document.querySelector('[data-slot="conversation.session.header"] header')
   const harnessTabs = [...(harnessHeader?.querySelectorAll('[role="tab"]') ?? [])].map((tab) => tab.textContent?.trim())
   if (harnessTabs.includes('Chat') || harnessTabs.includes('Trajectory')) return 'en'
   if (harnessTabs.includes('对话') || harnessTabs.includes('轨迹')) return 'zh'

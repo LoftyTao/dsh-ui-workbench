@@ -1,86 +1,90 @@
 # dsh-ui-workbench
 
-English | [中文](README.zh.md)
+中文 | [English](README.en.md)
 
-A DeepSeek Harness web plugin. Adds a right-side panel to the conversation page: file tree, line-numbered file viewer, and Git review of the current session's workspace.
+DeepSeek Harness 的 web 插件。在会话页右侧增加一个面板，提供当前会话工作区的文件树、带行号的文件查看器与 Git 审查。
 
-## Features
+## 截图
 
-- Right-side panel that pushes the conversation area with a CSS margin and leaves the official tool-details column untouched. Switches to an overlay on narrow viewports.
-- Panel width adjustable by dragging its left edge. The Files tab has a second splitter between the tree and the viewer.
-- Toggle button next to Session Log. Panel state is in-memory only and defaults to closed after a refresh.
-- File tree rooted at the current session's working directory. Directories expand lazily. Colored SVG icons for common file types.
-- Workspace search by path or file name with jump-to-preview. The Review tab filters changed files as you type. Recursive search skips `.git` and `node_modules`.
-- File viewer for UTF-8 text with line numbers, a copy-file-path button, Prism syntax highlighting, wrapping, and chunked reading and rendering by scroll position.
-- Git review covering staged, unstaged and untracked files. Scope switches between workspace changes and the last commit (or any branch ref). Changed-file tree, split or unified layouts, show-all-lines or hide-unchanged-lines with 3 lines of context. Additions and deletions are distinguished by color. A workspace without Git offers a `git init` entry.
-- Follows the harness light/dark theme and zh/en language. `Esc` closes the panel.
+![中文界面截图（1920 × 1080）](https://raw.githubusercontent.com/LoftyTao/dsh-ui-workbench/main/assets/workbench-zh.png)
 
-## Architecture
+## 特性
 
-Split into Host and Client parts, mounted as one `ui-workbench` row through `cordis.patch.yml`.
+- 右侧面板。用 CSS margin 推挤对话区，不占用官方工具详情列；窄屏切换为覆盖层。
+- 面板左边缘可拖拽调整宽度；「文件」页内文件树与查看器之间另有分割线。
+- 开关按钮位于会话日志（Session Log）旁。面板状态仅保存在内存中，刷新后默认关闭。
+- 文件树根为当前会话工作目录，目录懒加载展开；常用文件类型显示彩色 SVG 图标。
+- 工作区搜索按路径或文件名匹配并跳转预览；审查页随输入实时筛选变更文件；递归搜索跳过 `.git` 与 `node_modules`。
+- 文件查看器：UTF-8 文本，带行号、复制文件路径按钮、Prism 语法高亮、长行自动换行，按滚动位置分块读取与渲染。
+- Git 审查覆盖已暂存、未暂存与未跟踪文件。范围可在工作区变更与最近提交（或任意分支引用）间切换；提供变更文件树、并排/统一布局、全部行/隐藏未变更行（保留 3 行上下文）。增删行以颜色区分。无 Git 的工作区提供 `git init` 入口。
+- 跟随 Harness 的亮暗主题与中英文语言；`Esc` 关闭面板。
 
-- Host (`src/index.ts`). JSON routes under `/sidebar/api/*` implement file and Git operations with `node:fs` and `node:child_process`. Every request carries a `sessionId`; its working directory is resolved exclusively from that live session's header (`ctx.sessions.get(id).header.cwd`). Lexical paths and symlink targets must remain inside the canonical workspace. Git commands spawn the system `git` per request with `--porcelain` output.
-- Client (`src/client/index.tsx`). A React app mounted with `createRoot` into a portal on `document.body`. Open/tab/width state lives in a `useSyncExternalStore` store created in `apply`. The toggle registers in the `conversation.session.header.utilities` slot.
+## 架构
 
-### Host API routes
+分为 Host 与 Client 两部分，通过 `cordis.patch.yml` 以单个 `ui-workbench` 行挂载。
 
-| Route | Purpose |
+- Host（`src/index.ts`）：在 `/sidebar/api/*` 下注册 JSON 路由，用 `node:fs` 与 `node:child_process` 实现文件与 git 操作。每个请求携带 `sessionId`；工作目录只从该实时会话的头部（`ctx.sessions.get(id).header.cwd`）解析。词法路径和符号链接目标都必须位于规范化后的工作区内。git 命令每次请求调用系统 `git`，输出为 porcelain 格式。
+- Client（`src/client/index.tsx`）：React 应用，用 `createRoot` 挂载到 `document.body` 上的 portal。开/关、标签页、宽度状态存放于 `apply` 闭包内的 `useSyncExternalStore` store；开关注册在 `conversation.session.header.utilities` 插槽。
+
+### Host API 路由
+
+| 路由 | 用途 |
 | --- | --- |
-| `POST /sidebar/api/cwd` | resolve the session's working directory |
-| `POST /sidebar/api/list-dir` | list a directory |
-| `POST /sidebar/api/read-file` | read UTF-8 text, chunked (128,000 bytes per request) |
-| `POST /sidebar/api/search-files` | search file names below the workspace (80 results, 20,000 directories visited) |
-| `POST /sidebar/api/git/repository` | probe whether the workspace is a Git repository |
-| `POST /sidebar/api/git/init` | run `git init` in the workspace |
-| `POST /sidebar/api/git/branch`, `POST /sidebar/api/git/branches` | current branch, local branches |
-| `POST /sidebar/api/git/status` | working-tree changed files (staged, unstaged, untracked) |
-| `POST /sidebar/api/git/last-commit` | files changed by a commit/ref (default `HEAD`) |
-| `POST /sidebar/api/git/diff-file` | working-tree diff of one file (`-U3` or `-U999999`) |
-| `POST /sidebar/api/git/last-file-diff` | diff introduced by a commit/ref for one file |
+| `POST /sidebar/api/cwd` | 解析会话工作目录 |
+| `POST /sidebar/api/list-dir` | 列出目录 |
+| `POST /sidebar/api/read-file` | 按块读取 UTF-8 文本（每请求 128,000 字节） |
+| `POST /sidebar/api/search-files` | 在工作区下按文件名搜索（80 条结果，访问 20,000 个目录） |
+| `POST /sidebar/api/git/repository` | 探测工作区是否为 Git 仓库 |
+| `POST /sidebar/api/git/init` | 在工作区执行 `git init` |
+| `POST /sidebar/api/git/branch`、`POST /sidebar/api/git/branches` | 当前分支、本地分支列表 |
+| `POST /sidebar/api/git/status` | 工作区变更文件（已暂存、未暂存、未跟踪） |
+| `POST /sidebar/api/git/last-commit` | 某提交/引用变更的文件（默认 `HEAD`） |
+| `POST /sidebar/api/git/diff-file` | 单个文件的工作区 diff（`-U3` 或 `-U999999`） |
+| `POST /sidebar/api/git/last-file-diff` | 某提交/引用对单个文件引入的 diff |
 
-## Requirements
+## 环境要求
 
 - Node.js >= 20
-- pnpm (enabled once with `corepack enable`)
-- A DeepSeek Harness installation with the web profile (`~/.dsh/profiles/web`)
+- pnpm（首次用 `corepack enable` 启用）
+- 带 web profile（`~/.dsh/profiles/web`）的 DeepSeek Harness
 
-## Build from source
+## 从源代码构建
 
 ```sh
-corepack enable        # first time only
+corepack enable        # 仅首次
 pnpm install
 pnpm build
 ```
 
-`pnpm build` runs `tsc -p tsconfig.build.json` for type declarations (`lib/types`) and `tsdown` for the bundles: `lib/index.js` (host, ESM) and `lib/client.js` (browser).
+`pnpm build` 先运行 `tsc -p tsconfig.build.json` 生成类型声明（`lib/types`），再运行 `tsdown` 生成包：`lib/index.js`（host，ESM）与 `lib/client.js`（浏览器）。
 
-## Install
+## 安装
 
-The plugin follows the [DeepSeek Harness plugin format](https://deepseek-harness.github.io/deepseek-harness/develop/basic/); packaging details are in the [publish guide](https://deepseek-harness.github.io/deepseek-harness/develop/basic/publish).
+插件遵循 [DeepSeek Harness 插件格式](https://deepseek-harness.github.io/deepseek-harness/develop/basic/)；打包细节见[发布指南](https://deepseek-harness.github.io/deepseek-harness/develop/basic/publish)。
 
-### One command (recommended)
+### 一条命令（推荐）
 
-After the package is published to npm, install and activate it in the default web profile with:
+发布到 npm 后，以下命令会安装并启用默认 `web` profile：
 
 ```sh
 npx -y dsh-ui-workbench setup
 ```
 
-Choose a different profile with `npx -y dsh-ui-workbench setup --profile <name>`.
+其他 profile 可使用 `npx -y dsh-ui-workbench setup --profile <名称>`。
 
-### Via the DSH CLI
+### 通过 DSH CLI
 
-The command reads the bundle declaration in `cordis.patch.yml` automatically:
+命令自动读取 `cordis.patch.yml` 中的 bundle 声明：
 
 ```sh
 npx -y --package @deepseek-ai/dsh dsh plugin --profile web add dsh-ui-workbench
 ```
 
-This is equivalent to the one-command installer and can be run from any directory. Restart DSH and hard-refresh the page after installing.
+这与一条命令安装器等价，可在任意目录执行。安装后重启 DSH 并硬刷新页面。
 
-### Before the first npm release
+### 首次发布 npm 前
 
-The package name is currently unscoped. Before publishing, set the repository URL and issue tracker URLs in `package.json`, create a GitHub repository, then run:
+当前使用无 scope 的包名。首次发布前执行：
 
 ```sh
 pnpm check
@@ -88,11 +92,11 @@ npm login
 pnpm publish
 ```
 
-`pnpm check` validates the exact npm file list; the `prepack` hook repeats type checking and produces prebuilt `lib/` files, so normal npm installs never execute this repository's build scripts. The published tarball contains only the executable installer, DSH bundle patch, runtime bundles, public type declarations, package metadata, README, and license.
+`pnpm check` 会验证 npm 的精确文件列表；`prepack` 会再次进行类型检查并生成预编译的 `lib/` 文件。因此普通 npm 安装不会执行本仓库的构建脚本。发布的压缩包只包含安装器、DSH bundle patch、运行时 bundle、公开类型声明、包元数据、README 和许可证。
 
-### Manually
+### 手动挂载
 
-Add the row to the web profile's patch file:
+在 web profile 的 patch 文件中加入该行：
 
 ```yaml
 # ~/.dsh/profiles/web/cordis.patch.yml
@@ -101,12 +105,12 @@ Add the row to the web profile's patch file:
       name: 'dsh-ui-workbench'
 ```
 
-For a GitHub install, use a pinned tag or commit, for example `github:OWNER/dsh-ui-workbench#v0.1.0`. Git installs build from source and require the user to explicitly allow the package's `prepare` script; npm installs do not.
+若从 GitHub 安装，请固定 tag 或 commit，例如 `github:OWNER/dsh-ui-workbench#v0.1.0`。Git 安装需要从源码构建，用户必须显式允许包的 `prepare` 脚本；npm 安装则不需要。
 
-## Contributing
+## 贡献
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the module map, change rules, and verification commands. [AGENTS.md](AGENTS.md) gives coding agents the same project constraints as human contributors.
+[CONTRIBUTING.md](CONTRIBUTING.md) 说明模块边界、修改规则和验证命令；[AGENTS.md](AGENTS.md) 为编码智能体提供与人类贡献者一致的项目约束。
 
-## License
+## 许可证
 
 MIT

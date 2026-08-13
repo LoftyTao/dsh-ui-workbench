@@ -15,7 +15,7 @@ if (!patchText.includes(`name: '${manifest.name}'`)) {
 const expectedFiles = new Set([
   'LICENSE',
   'README.md',
-  'README.zh.md',
+  'README.en.md',
   'bin/dsh-ui-workbench.mjs',
   'cordis.patch.yml',
   'lib/client.js',
