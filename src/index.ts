@@ -2,15 +2,15 @@
  * dsh-ui-workbench host half: the /sidebar/api/* JSON routes (session cwd
  * resolution, directory listing, file read, git review). Every operation is
  * conversation-scoped: requests carry a sessionId and the session's
- * authoritative cwd comes from the session store; a missing cwd falls back to
- * a client-supplied absolute path or the process cwd.
+ * authoritative cwd comes only from the session store.
  *
  * The workbench panel lives entirely in the browser; this half only serves
  * the file/git data. The official tool-details panel is untouched — the client
  * half builds its own side panel and pushes the app shell with a CSS margin
  * (see src/client), so this plugin never occupies the `details` slot.
  */
-import { isAbsolute, relative, resolve } from 'node:path'
+import { realpath, stat } from 'node:fs/promises'
+import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { Context } from './context-types.ts'
 import { listDirectory, readTextFile, searchFiles } from './fs.ts'
 import * as git from './git.ts'
@@ -20,32 +20,60 @@ export const name = 'dsh-ui-workbench'
 
 export const inject = ['webServer', 'sessions']
 
-/** Resolve a session's authoritative cwd: live session header wins, then a
- *  client-supplied absolute path, then the process cwd. */
-function sessionCwdOf(ctx: Context, sessionId: string, clientCwd?: string): string {
+/** Resolve an existing session's workspace once, canonicalizing symlinks. */
+async function workspaceRootOf(ctx: Context, sessionId: string): Promise<string> {
   const headerCwd = ctx.sessions.get(sessionId)?.header.cwd
-  if (headerCwd !== undefined && headerCwd !== '') return headerCwd
-  if (clientCwd !== undefined && clientCwd !== '') {
-    if (!isAbsolute(clientCwd)) throw new WorkbenchError(400, 'bad-request', 'cwd must be absolute')
-    return clientCwd
+  if (headerCwd === undefined || headerCwd === '') {
+    throw new WorkbenchError(404, 'workspace-not-found', 'session workspace was not found')
   }
-  return process.cwd()
+  try {
+    const root = await realpath(headerCwd)
+    if (!(await stat(root)).isDirectory()) throw new Error('not a directory')
+    return root
+  } catch {
+    throw new WorkbenchError(404, 'workspace-not-found', 'session workspace was not found')
+  }
 }
 
-function childPath(root: string, child: string): string {
+function isInside(root: string, candidate: string): boolean {
+  const rel = relative(root, candidate)
+  return rel !== '..' && !rel.startsWith('..\\') && !rel.startsWith('../') && !isAbsolute(rel)
+}
+
+/** Resolve an existing path and reject lexical or symlink escapes. */
+async function existingChildPath(root: string, child: string): Promise<string> {
   if (!isAbsolute(child)) throw new WorkbenchError(400, 'bad-request', 'path must be absolute')
-  const rootPath = resolve(root)
-  const childPath = resolve(child)
-  const rel = relative(rootPath, childPath)
-  if (rel === '..' || rel.startsWith('..\\') || rel.startsWith('../') || isAbsolute(rel)) {
+  const lexicalPath = resolve(child)
+  if (!isInside(root, lexicalPath)) {
     throw new WorkbenchError(400, 'bad-request', 'path must be inside the workspace')
   }
-  return childPath
+  try {
+    const resolvedPath = await realpath(lexicalPath)
+    if (!isInside(root, resolvedPath)) throw new WorkbenchError(400, 'bad-request', 'path must be inside the workspace')
+    return resolvedPath
+  } catch (error) {
+    if (error instanceof WorkbenchError) throw error
+    throw new WorkbenchError(404, 'not-found', 'path was not found')
+  }
+}
+
+/** Git also needs deleted paths, which no longer have a real filesystem entry. */
+async function gitFilePath(root: string, file: string): Promise<string> {
+  if (isAbsolute(file)) throw new WorkbenchError(400, 'bad-request', 'file must be relative')
+  const lexicalPath = resolve(root, file)
+  if (!isInside(root, lexicalPath)) throw new WorkbenchError(400, 'bad-request', 'file must be inside the workspace')
+  try {
+    const resolvedPath = await realpath(lexicalPath)
+    if (!isInside(root, resolvedPath)) throw new WorkbenchError(400, 'bad-request', 'file must be inside the workspace')
+    return relative(root, resolvedPath).split(sep).join('/')
+  } catch (error) {
+    if (error instanceof WorkbenchError) throw error
+    return relative(root, lexicalPath).split(sep).join('/')
+  }
 }
 
 interface HandlerArgs {
   sessionId: string
-  cwd?: string
   path?: string
   file?: string
   ref?: string
@@ -65,7 +93,6 @@ export function apply(ctx: Context): void {
       const sessionId = requireString(body.sessionId, 'sessionId')
       const args: HandlerArgs = {
         sessionId,
-        cwd: typeof body.cwd === 'string' ? body.cwd : undefined,
         path: typeof body.path === 'string' ? body.path : undefined,
         file: typeof body.file === 'string' ? body.file : undefined,
         ref: typeof body.ref === 'string' ? body.ref : undefined,
@@ -84,14 +111,14 @@ export function apply(ctx: Context): void {
     {
       method: 'cwd',
       path: '/sidebar/api/cwd',
-      handler: async (args) => ({ cwd: sessionCwdOf(ctx, args.sessionId, args.cwd) }),
+      handler: async (args) => ({ cwd: await workspaceRootOf(ctx, args.sessionId) }),
     },
     {
       method: 'listDir',
       path: '/sidebar/api/list-dir',
       handler: async (args) => {
-        const root = sessionCwdOf(ctx, args.sessionId, args.cwd)
-        const target = args.path !== undefined && args.path !== '' ? childPath(root, args.path) : root
+        const root = await workspaceRootOf(ctx, args.sessionId)
+        const target = args.path !== undefined && args.path !== '' ? await existingChildPath(root, args.path) : root
         return { path: target, entries: await listDirectory(target) }
       },
     },
@@ -99,8 +126,8 @@ export function apply(ctx: Context): void {
       method: 'readFile',
       path: '/sidebar/api/read-file',
       handler: async (args) => {
-        const root = sessionCwdOf(ctx, args.sessionId, args.cwd)
-        const target = childPath(root, requireString(args.path, 'path'))
+        const root = await workspaceRootOf(ctx, args.sessionId)
+        const target = await existingChildPath(root, requireString(args.path, 'path'))
         const { content, truncated, nextOffset } = await readTextFile(target, args.offset ?? 0)
         return { path: target, content, truncated, nextOffset }
       },
@@ -109,58 +136,60 @@ export function apply(ctx: Context): void {
       method: 'searchFiles',
       path: '/sidebar/api/search-files',
       handler: async (args) => searchFiles(
-        sessionCwdOf(ctx, args.sessionId, args.cwd),
+        await workspaceRootOf(ctx, args.sessionId),
         requireString(args.query, 'query'),
       ),
     },
     {
       method: 'gitRepository',
       path: '/sidebar/api/git/repository',
-      handler: async (args) => ({ initialized: await git.isRepository(sessionCwdOf(ctx, args.sessionId, args.cwd)) }),
+      handler: async (args) => ({ initialized: await git.isRepository(await workspaceRootOf(ctx, args.sessionId)) }),
     },
     {
       method: 'gitInit',
       path: '/sidebar/api/git/init',
       handler: async (args) => {
-        await git.initRepository(sessionCwdOf(ctx, args.sessionId, args.cwd))
+        await git.initRepository(await workspaceRootOf(ctx, args.sessionId))
         return { initialized: true }
       },
     },
     {
       method: 'gitBranch',
       path: '/sidebar/api/git/branch',
-      handler: async (args) => ({ branch: await git.branch(sessionCwdOf(ctx, args.sessionId, args.cwd)) }),
+      handler: async (args) => ({ branch: await git.branch(await workspaceRootOf(ctx, args.sessionId)) }),
     },
     {
       method: 'gitBranches',
       path: '/sidebar/api/git/branches',
-      handler: async (args) => ({ branches: await git.branches(sessionCwdOf(ctx, args.sessionId, args.cwd)) }),
+      handler: async (args) => ({ branches: await git.branches(await workspaceRootOf(ctx, args.sessionId)) }),
     },
     {
       method: 'gitStatusFiles',
       path: '/sidebar/api/git/status',
-      handler: async (args) => ({ files: await git.statusFiles(sessionCwdOf(ctx, args.sessionId, args.cwd)) }),
+      handler: async (args) => ({ files: await git.statusFiles(await workspaceRootOf(ctx, args.sessionId)) }),
     },
     {
       method: 'gitLastCommitFiles',
       path: '/sidebar/api/git/last-commit',
       handler: async (args) => ({
-        files: await git.lastCommitFiles(sessionCwdOf(ctx, args.sessionId, args.cwd), args.ref || 'HEAD'),
+        files: await git.lastCommitFiles(await workspaceRootOf(ctx, args.sessionId), args.ref || 'HEAD'),
       }),
     },
     {
       method: 'gitDiffFile',
       path: '/sidebar/api/git/diff-file',
-      handler: async (args) => ({
-        diff: await git.diffFile(sessionCwdOf(ctx, args.sessionId, args.cwd), requireString(args.file, 'file'), args.full),
-      }),
+      handler: async (args) => {
+        const root = await workspaceRootOf(ctx, args.sessionId)
+        return { diff: await git.diffFile(root, await gitFilePath(root, requireString(args.file, 'file')), args.full) }
+      },
     },
     {
       method: 'gitLastFileDiff',
       path: '/sidebar/api/git/last-file-diff',
-      handler: async (args) => ({
-        diff: await git.lastFileDiff(sessionCwdOf(ctx, args.sessionId, args.cwd), requireString(args.file, 'file'), args.ref || 'HEAD', args.full),
-      }),
+      handler: async (args) => {
+        const root = await workspaceRootOf(ctx, args.sessionId)
+        return { diff: await git.lastFileDiff(root, await gitFilePath(root, requireString(args.file, 'file')), args.ref || 'HEAD', args.full) }
+      },
     },
   ]
 

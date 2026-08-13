@@ -19,7 +19,7 @@ A DeepSeek Harness web plugin. Adds a right-side panel to the conversation page:
 
 Split into Host and Client parts, mounted as one `ui-workbench` row through `cordis.patch.yml`.
 
-- Host (`src/index.ts`). JSON routes under `/sidebar/api/*` implement file and Git operations with `node:fs` and `node:child_process`. Every request carries a `sessionId`; the working directory is resolved from the session header (`ctx.sessions.get(id).header.cwd`), falling back to a client-supplied absolute path, then the process cwd. Git commands spawn the system `git` per request with `--porcelain` output.
+- Host (`src/index.ts`). JSON routes under `/sidebar/api/*` implement file and Git operations with `node:fs` and `node:child_process`. Every request carries a `sessionId`; its working directory is resolved exclusively from that live session's header (`ctx.sessions.get(id).header.cwd`). Lexical paths and symlink targets must remain inside the canonical workspace. Git commands spawn the system `git` per request with `--porcelain` output.
 - Client (`src/client/index.tsx`). A React app mounted with `createRoot` into a portal on `document.body`. Open/tab/width state lives in a `useSyncExternalStore` store created in `apply`. The toggle registers in the `conversation.session.header.utilities` slot.
 
 ### Host API routes

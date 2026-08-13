@@ -19,7 +19,7 @@ DeepSeek Harness 的 web 插件。在会话页右侧增加一个面板，提供�
 
 分为 Host 与 Client 两部分，通过 `cordis.patch.yml` 以单个 `ui-workbench` 行挂载。
 
-- Host（`src/index.ts`）：在 `/sidebar/api/*` 下注册 JSON 路由，用 `node:fs` 与 `node:child_process` 实现文件与 git 操作。每个请求携带 `sessionId`；工作目录从会话头部解析（`ctx.sessions.get(id).header.cwd`），依次回退到客户端提供的绝对路径、进程 cwd。git 命令每次请求调用系统 `git`，输出为 porcelain 格式。
+- Host（`src/index.ts`）：在 `/sidebar/api/*` 下注册 JSON 路由，用 `node:fs` 与 `node:child_process` 实现文件与 git 操作。每个请求携带 `sessionId`；工作目录只从该实时会话的头部（`ctx.sessions.get(id).header.cwd`）解析。词法路径和符号链接目标都必须位于规范化后的工作区内。git 命令每次请求调用系统 `git`，输出为 porcelain 格式。
 - Client（`src/client/index.tsx`）：React 应用，用 `createRoot` 挂载到 `document.body` 上的 portal。开/关、标签页、宽度状态存放于 `apply` 闭包内的 `useSyncExternalStore` store；开关注册在 `conversation.session.header.utilities` 插槽。
 
 ### Host API 路由
