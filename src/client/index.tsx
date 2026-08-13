@@ -8,6 +8,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore, useState, type ReactNode, type RefObject, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { BracketsYellow as JsonFileIcon, CodeBlue as CssFileIcon, Docker as DockerFileIcon, Document as DocumentFileIcon, Go as GoFileIcon, Ignore as IgnoreFileIcon, Image as ImageFileIcon, Java as JavaFileIcon, Js as JavaScriptFileIcon, Markdown as MarkdownFileIcon, NPM as NpmFileIcon, PNPM as PnpmFileIcon, Python as PythonFileIcon, Reactjs as ReactJavaScriptFileIcon, Reactts as ReactTypeScriptFileIcon, Rust as RustFileIcon, Sass as SassFileIcon, Shell as ShellFileIcon, SVG as SvgFileIcon, Svelte as SvelteFileIcon, Text as TextFileIcon, Tsconfig as TsconfigFileIcon, TypeScript as TypeScriptFileIcon, Vue as VueFileIcon, XML as XmlFileIcon, Yaml as YamlFileIcon } from '@react-symbols/icons/files'
+import { Folder as FolderFileIcon } from '@react-symbols/icons/folders'
 import Prism from 'prismjs'
 import 'prismjs/components/prism-typescript'
 import 'prismjs/components/prism-jsx'
@@ -32,6 +34,23 @@ const MIN_WIDTH = 320
 const MAX_WIDTH = 1400
 const TREE_MIN = 120
 const TREE_MAX = 480
+const PRISM_LANGUAGE_BY_EXTENSION: Record<string, string> = {
+  ts: 'typescript', tsx: 'tsx', js: 'javascript', jsx: 'jsx', json: 'json', css: 'css', scss: 'scss',
+  html: 'markup', htm: 'markup', xml: 'markup', svg: 'markup', md: 'markdown', py: 'python', sh: 'bash',
+  bash: 'bash', ps1: 'powershell', yml: 'yaml', yaml: 'yaml', sql: 'sql',
+}
+const FILE_ICON_BY_NAME: Record<string, typeof TextFileIcon> = {
+  'package.json': NpmFileIcon, 'package-lock.json': NpmFileIcon, 'pnpm-lock.yaml': PnpmFileIcon,
+  'pnpm-lock.yml': PnpmFileIcon, dockerfile: DockerFileIcon, '.gitignore': IgnoreFileIcon, 'tsconfig.json': TsconfigFileIcon,
+}
+const FILE_ICON_BY_EXTENSION: Record<string, typeof TextFileIcon> = {
+  ts: TypeScriptFileIcon, tsx: ReactTypeScriptFileIcon, js: JavaScriptFileIcon, jsx: ReactJavaScriptFileIcon,
+  json: JsonFileIcon, css: CssFileIcon, scss: SassFileIcon, sass: SassFileIcon, html: XmlFileIcon, htm: XmlFileIcon,
+  xml: XmlFileIcon, md: MarkdownFileIcon, mdx: MarkdownFileIcon, py: PythonFileIcon, rs: RustFileIcon, go: GoFileIcon,
+  java: JavaFileIcon, vue: VueFileIcon, svelte: SvelteFileIcon, yml: YamlFileIcon, yaml: YamlFileIcon,
+  svg: SvgFileIcon, png: ImageFileIcon, jpg: ImageFileIcon, jpeg: ImageFileIcon, gif: ImageFileIcon, webp: ImageFileIcon,
+  sh: ShellFileIcon, bash: ShellFileIcon, zsh: ShellFileIcon, ps1: ShellFileIcon, txt: TextFileIcon,
+}
 
 type IconName = 'chevron' | 'file' | 'folder' | 'git' | 'files' | 'refresh' | 'close' | 'copy' | 'branch' | 'search'
 
@@ -60,30 +79,15 @@ function fileName(path: string): string {
   return path.split(/[\\/]/).filter(Boolean).pop() ?? path
 }
 
-function parentPath(path: string): string {
-  const normalized = path.replace(/\\/g, '/')
-  const index = normalized.lastIndexOf('/')
-  return index > 0 ? normalized.slice(0, index) : ''
-}
-
-function languageOf(path: string): string {
-  const ext = path.split('.').pop()?.toLowerCase() ?? ''
-  const languages: Record<string, string> = {
-    ts: 'TypeScript', tsx: 'TSX', js: 'JavaScript', jsx: 'JSX', json: 'JSON', css: 'CSS', scss: 'SCSS',
-    html: 'HTML', md: 'Markdown', py: 'Python', rs: 'Rust', go: 'Go', java: 'Java', yml: 'YAML', yaml: 'YAML',
-    sh: 'Shell', ps1: 'PowerShell', sql: 'SQL', toml: 'TOML', vue: 'Vue', svelte: 'Svelte',
-  }
-  return languages[ext] ?? (ext ? ext.toUpperCase() : 'Text')
+function workspaceFilePath(cwd: string | null, path: string): string {
+  if (/^(?:[a-z]:[\\/]|\/)/i.test(path) || cwd === null) return path
+  const separator = cwd.includes('\\') ? '\\' : '/'
+  return `${cwd.replace(/[\\/]$/, '')}${separator}${path.replace(/[\\/]/g, separator).replace(/^[\\/]/, '')}`
 }
 
 function prismLanguage(path: string): string | null {
   const ext = path.split('.').pop()?.toLowerCase() ?? ''
-  const languages: Record<string, string> = {
-    ts: 'typescript', tsx: 'tsx', js: 'javascript', jsx: 'jsx', json: 'json', css: 'css', scss: 'scss',
-    html: 'markup', htm: 'markup', xml: 'markup', svg: 'markup', md: 'markdown', py: 'python', sh: 'bash',
-    bash: 'bash', ps1: 'powershell', yml: 'yaml', yaml: 'yaml', sql: 'sql',
-  }
-  return languages[ext] ?? null
+  return PRISM_LANGUAGE_BY_EXTENSION[ext] ?? null
 }
 
 function escapeHtml(text: string): string {
@@ -116,23 +120,11 @@ function highlightedLines(text: string, language: string | null): string[] | nul
 }
 
 function FileTypeIcon(props: { name: string; size?: number }): ReactNode {
-  const ext = props.name.split('.').pop()?.toLowerCase() ?? ''
-  const known: Record<string, { kind: string; label: string }> = {
-    ts: { kind: 'ts', label: 'TS' }, tsx: { kind: 'tsx', label: 'TX' }, js: { kind: 'js', label: 'JS' }, jsx: { kind: 'jsx', label: 'JX' },
-    json: { kind: 'json', label: '{}' }, css: { kind: 'css', label: '#' }, scss: { kind: 'scss', label: 'S' }, html: { kind: 'html', label: '<>' },
-    md: { kind: 'md', label: 'M' }, py: { kind: 'py', label: 'PY' }, rs: { kind: 'rs', label: 'RS' }, go: { kind: 'go', label: 'GO' },
-    vue: { kind: 'vue', label: 'V' }, svelte: { kind: 'svelte', label: 'S' }, yml: { kind: 'yaml', label: 'Y' }, yaml: { kind: 'yaml', label: 'Y' },
-    svg: { kind: 'svg', label: '◇' }, png: { kind: 'image', label: '●' }, jpg: { kind: 'image', label: '●' }, jpeg: { kind: 'image', label: '●' },
-  }
-  const type = known[ext] ?? { kind: 'file', label: '' }
+  const name = fileName(props.name).toLowerCase()
+  const extension = name.split('.').pop() ?? ''
+  const FileSvg = FILE_ICON_BY_NAME[name] ?? FILE_ICON_BY_EXTENSION[extension] ?? DocumentFileIcon
   const size = props.size ?? 16
-  return (
-    <svg className="uwb-file-type-icon" data-kind={type.kind} width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
-      <path className="uwb-file-sheet" d="M3.25 1.5h5.6l3.9 3.9v8.1a1 1 0 0 1-1 1h-8.5a1 1 0 0 1-1-1v-11a1 1 0 0 1 1-1Z" />
-      <path className="uwb-file-fold" d="M8.75 1.75v3.9h3.9" />
-      {type.label !== '' ? <text x="7.5" y="11.8" textAnchor="middle">{type.label}</text> : null}
-    </svg>
-  )
+  return <FileSvg className="uwb-file-type-icon" width={size} height={size} aria-hidden="true" />
 }
 
 function useLazyLimit(total: number, resetKey: string, batch = 400): { limit: number; sentinel: RefObject<HTMLDivElement> } {
@@ -398,7 +390,7 @@ function FsTreeNode(props: {
     <div>
       <div className={'uwb-row' + (props.entry.dir ? ' dir' : ' file') + (sel ? ' sel' : '')} onClick={() => void toggle()}>
         <span className={'uwb-chevron' + (expanded ? ' expanded' : '')}>{props.entry.dir ? <Icon name="chevron" size={13} /> : null}</span>
-        {props.entry.dir ? <Icon name="folder" size={15} className="uwb-file-icon" /> : <FileTypeIcon name={props.entry.name} size={16} />}
+        {props.entry.dir ? <FolderFileIcon className="uwb-file-icon" width={16} height={16} aria-hidden="true" /> : <FileTypeIcon name={props.entry.name} size={16} />}
         <span className="uwb-row-label">{props.entry.name}</span>
       </div>
       {expanded ? (
@@ -565,12 +557,10 @@ function FileViewer(props: { sessionId: string; cwd: string | null; file: FsTree
     <div className="uwb-document">
       <div className="uwb-file-head">
         <div className="uwb-file-ident">
-          <FileTypeIcon name={content.path} size={17} />
-          <div><strong>{fileName(content.path)}</strong><span>{parentPath(content.path)}</span></div>
+          <strong>{fileName(content.path)}</strong>
         </div>
         <div className="uwb-file-actions">
-          <span className="uwb-language">{languageOf(content.path)}</span>
-          <button className="uwb-icon-btn" onClick={() => void navigator.clipboard?.writeText(content.text)} title="复制文件内容" aria-label="复制文件内容"><Icon name="copy" size={15} /></button>
+          <button className="uwb-icon-btn" onClick={() => void navigator.clipboard?.writeText(content.path)} title="复制文件路径" aria-label="复制文件路径"><Icon name="copy" size={15} /></button>
         </div>
       </div>
       {content.truncated ? <div className="uwb-notice">文件较大，内容将在滚动时分块加载</div> : null}
@@ -611,7 +601,7 @@ function GitTreeNodeView(props: { node: GitTreeEntry; onOpen: (node: GitTreeEntr
         onClick={() => { if (isLeaf) props.onOpen(props.node); else setExpanded(!expanded) }}
       >
         <span className={'uwb-chevron' + (expanded ? ' expanded' : '')}>{isLeaf ? null : <Icon name="chevron" size={13} />}</span>
-        {isLeaf ? <FileTypeIcon name={props.node.name} size={16} /> : <Icon name="folder" size={15} className="uwb-file-icon" />}
+        {isLeaf ? <FileTypeIcon name={props.node.name} size={16} /> : <FolderFileIcon className="uwb-file-icon" width={16} height={16} aria-hidden="true" />}
         {isLeaf ? <span className={'uwb-code ' + codeClass}>{String(props.node.code ?? '?').replace(/\s/g, '') || '?'}</span> : null}
         <span className="uwb-row-label">{props.node.name}</span>
       </div>
@@ -739,10 +729,12 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
               <div className="uwb-document-head">
                 <div className="uwb-file-head">
                   <div className="uwb-file-ident">
-                    <FileTypeIcon name={sel.path} size={17} />
-                    <div><strong>{fileName(sel.path)}</strong><span>{parentPath(sel.path)}</span></div>
+                    <strong>{fileName(sel.path)}</strong>
                   </div>
-                  <div className="uwb-diff-stats"><span className="add">+{additions}</span><span className="del">−{deletions}</span></div>
+                  <div className="uwb-file-actions">
+                    <div className="uwb-diff-stats"><span className="add">+{additions}</span><span className="del">−{deletions}</span></div>
+                    <button className="uwb-icon-btn" onClick={() => void navigator.clipboard?.writeText(workspaceFilePath(props.cwd, sel.path))} title="复制文件路径" aria-label="复制文件路径"><Icon name="copy" size={15} /></button>
+                  </div>
                 </div>
                 <div className="uwb-diff-toolbar">
                   <div className="uwb-segment" role="group" aria-label="差异布局">

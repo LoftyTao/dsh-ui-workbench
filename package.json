@@ -84,6 +84,7 @@
     "typescript": "^5.6.0"
   },
   "dependencies": {
+    "@react-symbols/icons": "^1.4.1",
     "prismjs": "^1.30.0"
   }
 }
