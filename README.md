@@ -21,18 +21,10 @@ DeepSeek Harness 的 WebUI 插件。在会话页右侧增加一个面板，提�
 需要 Node.js 20+ 与带 `web` profile 的 DeepSeek Harness。
 
 ```sh
-npx -y dsh-ui-workbench setup
+npx -y --package @deepseek-ai/dsh dsh plugin --profile web add github:LoftyTao/dsh-ui-workbench#v0.1.0
 ```
 
-指定其他 profile：`npx -y dsh-ui-workbench setup --profile <名称>`。
-
-也可通过 DSH CLI 安装：
-
-```sh
-npx -y --package @deepseek-ai/dsh dsh plugin --profile web add dsh-ui-workbench
-```
-
-安装后重启 DSH 并硬刷新页面。
+GitHub 安装会从源码构建，请在 DSH 提示时允许 `prepare` 脚本。安装后重启 DSH 并硬刷新页面。
 
 ## 许可证
 

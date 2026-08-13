@@ -3,6 +3,7 @@
 import { spawnSync } from 'node:child_process'
 
 const packageName = 'dsh-ui-workbench'
+const packageSpec = 'github:LoftyTao/dsh-ui-workbench#v0.1.0'
 
 function usage() {
   console.log(`Usage: npx -y ${packageName} setup [--profile <name>]
@@ -48,7 +49,7 @@ if (command === undefined || command === '--help' || command === '-h') {
     const result = spawnSync(npx, [
       '--yes',
       '--package', '@deepseek-ai/dsh',
-      'dsh', 'plugin', '--profile', profile, 'add', packageName,
+      'dsh', 'plugin', '--profile', profile, 'add', packageSpec,
     ], { stdio: 'inherit' })
     if (result.error !== undefined) fail(`could not start npx: ${result.error.message}`)
     else process.exitCode = result.status ?? 1

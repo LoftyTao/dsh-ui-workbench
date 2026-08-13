@@ -21,18 +21,10 @@ A DeepSeek Harness WebUI plugin. It adds a right-side panel to the conversation 
 Requires Node.js 20+ and DeepSeek Harness with the `web` profile.
 
 ```sh
-npx -y dsh-ui-workbench setup
+npx -y --package @deepseek-ai/dsh dsh plugin --profile web add github:LoftyTao/dsh-ui-workbench#v0.1.0
 ```
 
-For another profile: `npx -y dsh-ui-workbench setup --profile <name>`.
-
-Or install through the DSH CLI:
-
-```sh
-npx -y --package @deepseek-ai/dsh dsh plugin --profile web add dsh-ui-workbench
-```
-
-Restart DSH and hard-refresh the page after installation.
+GitHub installs build from source; allow the `prepare` script when DSH prompts. Restart DSH and hard-refresh the page after installation.
 
 ## License
 
