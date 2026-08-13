@@ -2,6 +2,14 @@
   "name": "dsh-ui-workbench",
   "version": "0.1.0",
   "description": "DSH web plugin: a right-side workbench panel (file tree / file viewer / git review) with a draggable-width side panel that coexists with the official tool-details panel.",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "cordis",
+    "git-review",
+    "workbench"
+  ],
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
@@ -14,12 +22,12 @@
       "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
     },
-    "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "engines": {
     "node": ">=20"
   },
+  "packageManager": "pnpm@11.21.0",
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
@@ -36,15 +44,26 @@
     "lib/index.js",
     "lib/client.js",
     "lib/types/**/*.d.ts",
-    "src",
+    "bin/dsh-ui-workbench.mjs",
     "cordis.patch.yml",
     "dsh.plugin.json",
-    "README.md"
+    "README.md",
+    "README.zh.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && tsdown",
     "typecheck": "tsc --noEmit",
-    "prepare": "tsdown"
+    "check": "pnpm typecheck && pnpm build && pnpm verify:package && pnpm pack:check",
+    "pack:check": "npm pack --dry-run --ignore-scripts",
+    "verify:package": "node scripts/verify-package.mjs",
+    "prepare": "tsdown",
+    "prepack": "pnpm typecheck && pnpm build"
+  },
+  "bin": {
+    "dsh-ui-workbench": "./bin/dsh-ui-workbench.mjs"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "license": "MIT",
   "peerDependencies": {

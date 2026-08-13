@@ -10,7 +10,7 @@
  * half builds its own side panel and pushes the app shell with a CSS margin
  * (see src/client), so this plugin never occupies the `details` slot.
  */
-import { isAbsolute, join } from 'node:path'
+import { isAbsolute, relative, resolve } from 'node:path'
 import type { Context } from './context-types.ts'
 import { listDirectory, readTextFile, searchFiles } from './fs.ts'
 import * as git from './git.ts'
@@ -34,8 +34,13 @@ function sessionCwdOf(ctx: Context, sessionId: string, clientCwd?: string): stri
 
 function childPath(root: string, child: string): string {
   if (!isAbsolute(child)) throw new WorkbenchError(400, 'bad-request', 'path must be absolute')
-  const rel = child.startsWith(root) ? child.slice(root.length).replace(/^[\\/]+/, '') : child
-  return join(root, rel)
+  const rootPath = resolve(root)
+  const childPath = resolve(child)
+  const rel = relative(rootPath, childPath)
+  if (rel === '..' || rel.startsWith('..\\') || rel.startsWith('../') || isAbsolute(rel)) {
+    throw new WorkbenchError(400, 'bad-request', 'path must be inside the workspace')
+  }
+  return childPath
 }
 
 interface HandlerArgs {
