@@ -17,7 +17,7 @@
   --uwb-code-font: var(--ds-font-family-code, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace);
 }
 
-#root {
+.uwb-host-content {
   width: calc(100% - var(--uwb-width, 0px));
   margin-right: var(--uwb-width, 0px);
   transition: width var(--ds-transition-duration-slow, 200ms) cubic-bezier(.2, .8, .2, 1), margin-right var(--ds-transition-duration-slow, 200ms) cubic-bezier(.2, .8, .2, 1);
@@ -27,7 +27,7 @@
 
 .uwb-root {
   position: fixed;
-  inset: 0 0 0 auto;
+  inset: var(--uwb-top, 0px) 0 0 auto;
   z-index: 900;
   display: flex;
   flex-direction: column;
@@ -121,7 +121,6 @@ body.uwb-is-resizing, body.uwb-is-resizing * { cursor: col-resize !important; us
 }
 
 .uwb-icon-btn:hover { color: var(--uwb-text); background: var(--uwb-hover); }
-.uwb-close { margin-left: auto; }
 
 .uwb-search {
   position: sticky;
@@ -235,7 +234,7 @@ body.uwb-is-resizing, body.uwb-is-resizing * { cursor: col-resize !important; us
 .uwb-file-actions, .uwb-diff-stats { display: flex; flex: none; align-items: center; gap: 6px; }
 
 .uwb-code-view { min-width: max-content; padding: 10px 0 32px; counter-reset: line; }
-.uwb-line { display: flex; min-height: 20px; font-family: var(--uwb-code-font); font-size: 12px; line-height: 20px; }
+.uwb-line { display: flex; min-height: 20px; font-family: var(--uwb-code-font); font-size: 13px; line-height: 20px; }
 .uwb-line:hover { background: var(--uwb-hover); }
 .uwb-ln { flex: none; width: 48px; padding: 0 10px 0 6px; color: var(--uwb-faint); text-align: right; user-select: none; }
 .uwb-lc { flex: 1; min-width: 0; padding: 0 20px 0 10px; border-left: 1px solid var(--uwb-border); white-space: pre; }
@@ -327,23 +326,24 @@ body.uwb-is-resizing, body.uwb-is-resizing * { cursor: col-resize !important; us
 .uwb-openbtn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 30px;
-  padding: 5px 10px;
-  color: var(--dsw-alias-label-secondary, inherit);
+  gap: 4px;
+  height: 32px;
+  padding: 6px 12px;
+  color: var(--dsw-alias-label-primary, inherit);
   background: transparent;
-  border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, .25));
-  border-radius: 8px;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, .1));
+  border-radius: 18px;
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .uwb-openbtn:hover { background: var(--uwb-hover); }
-.uwb-openbtn.on { color: var(--uwb-accent); background: var(--uwb-active); border-color: var(--uwb-accent); }
+.uwb-openbtn.on, .uwb-openbtn.on:hover { color: var(--uwb-accent); background: transparent; }
 
 @media (max-width: 1100px) {
-  #root { width: 100% !important; margin-right: 0 !important; }
+  .uwb-host-content { width: 100% !important; margin-right: 0 !important; }
   .uwb-root { width: min(100vw, 720px) !important; }
 }
 
@@ -358,6 +358,6 @@ body.uwb-is-resizing, body.uwb-is-resizing * { cursor: col-resize !important; us
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #root, .uwb-root, .uwb-chevron, .uwb-resize::after { transition: none; }
+  .uwb-host-content, .uwb-root, .uwb-chevron, .uwb-resize::after { transition: none; }
   .uwb-loading span { animation-duration: 1.4s; }
 }

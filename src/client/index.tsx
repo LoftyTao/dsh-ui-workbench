@@ -1,10 +1,9 @@
 /**
  * dsh-ui-workbench client half: a right-side workbench panel (file tree /
- * file viewer / git review) portalled onto document.body, sized via the CSS
- * `#root { margin-right: var(--uwb-width) }` push so the app shell yields
- * space but the official tool-details panel stays untouched. A header action
- * (beside the session title) toggles the panel; the panel's left edge drags
- * its width, and the file tree / viewer divider also drags.
+ * file viewer / git review) portalled onto document.body. The active session's
+ * scroll body receives the width offset, leaving its header and the official
+ * tool-details panel untouched. A utility beside Session Log toggles the
+ * panel; the panel's left edge and the file tree divider are both draggable.
  */
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore, useState, type ReactNode, type RefObject, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -25,6 +24,7 @@ import 'prismjs/components/prism-yaml'
 import 'prismjs/components/prism-sql'
 import type { Context } from '../context-types.ts'
 import * as api from './api.ts'
+import { I18nProvider, useI18n } from './i18n.tsx'
 import './workbench.css'
 
 export const inject = ['slots', 'sessions']
@@ -366,6 +366,7 @@ function FsTreeNode(props: {
   sessionId: string
   cwd: string | null
 }): ReactNode {
+  const { t } = useI18n()
   const [expanded, setExpanded] = useState(false)
   const [children, setChildren] = useState<FsTreeEntry[] | null>(null)
   const [loading, setLoading] = useState(false)
@@ -395,7 +396,7 @@ function FsTreeNode(props: {
       </div>
       {expanded ? (
         <div className="uwb-children">
-          {loading ? <div className="uwb-empty">加载中…</div>
+          {loading ? <div className="uwb-empty">{t('loading')}</div>
             : (children ?? []).map((c, i) => (
               <FsTreeNode key={i} entry={c} onOpen={props.onOpen} selectedPath={props.selectedPath} sessionId={props.sessionId} cwd={props.cwd} />
             ))}
@@ -406,6 +407,7 @@ function FsTreeNode(props: {
 }
 
 function FileTree(props: { sessionId: string; cwd: string | null; onOpen: (entry: FsTreeEntry) => void; selectedPath: string | null }): ReactNode {
+  const { t } = useI18n()
   const [rootEntries, setRootEntries] = useState<FsTreeEntry[]>([])
   const [err, setErr] = useState('')
 
@@ -413,16 +415,16 @@ function FileTree(props: { sessionId: string; cwd: string | null; onOpen: (entry
     let live = true
     if (props.cwd == null) {
       setRootEntries([])
-      setErr('未找到当前工作区目录')
+      setErr(t('noWorkspace'))
       return () => { live = false }
     }
     setErr('')
     api.listDir(props.sessionId, props.cwd).then((r) => {
       if (!live) return
       setRootEntries(buildDirTree(r.entries, r.path))
-    }).catch((e: Error) => { if (live) setErr(e.message) })
+    }).catch(() => { if (live) setErr(t('listDirFailed')) })
     return () => { live = false }
-  }, [props.sessionId, props.cwd])
+  }, [props.sessionId, props.cwd, t])
 
   return (
     <div className="uwb-tree-content">
@@ -439,6 +441,7 @@ function WorkspaceSearch(props: {
   cwd: string | null
   onOpen: (entry: FsTreeEntry) => void
 }): ReactNode {
+  const { t } = useI18n()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<api.FsSearchEntry[]>([])
   const [loading, setLoading] = useState(false)
@@ -462,28 +465,28 @@ function WorkspaceSearch(props: {
         setResults(response.entries)
         setTruncated(response.truncated)
         setError('')
-      }).catch((reason: unknown) => {
+      }).catch(() => {
         if (!live) return
         setResults([])
-        setError(reason instanceof Error ? reason.message : '搜索失败')
+        setError(t('searchFailed'))
       }).finally(() => { if (live) setLoading(false) })
     }, 180)
     return () => { live = false; window.clearTimeout(timer) }
-  }, [props.cwd, props.sessionId, query])
+  }, [props.cwd, props.sessionId, query, t])
 
   const active = query.trim() !== ''
   return (
     <div className={'uwb-search' + (active ? ' active' : '')}>
       <div className="uwb-search-box">
         <Icon name="search" size={15} />
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索工作区文件" aria-label="搜索工作区文件" />
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('searchWorkspace')} aria-label={t('searchWorkspace')} />
         {loading ? <span className="uwb-search-spinner" /> : null}
-        {active && !loading ? <button className="uwb-search-clear" onClick={() => setQuery('')} aria-label="清除搜索"><Icon name="close" size={13} /></button> : null}
+        {active && !loading ? <button className="uwb-search-clear" onClick={() => setQuery('')} aria-label={t('clearSearch')}><Icon name="close" size={13} /></button> : null}
       </div>
       {active ? (
         <div className="uwb-search-results">
           {error ? <div className="uwb-search-status uwb-err">{error}</div> : null}
-          {!loading && error === '' && results.length === 0 ? <div className="uwb-search-status">没有匹配的文件</div> : null}
+          {!loading && error === '' && results.length === 0 ? <div className="uwb-search-status">{t('noMatchingFiles')}</div> : null}
           {results.map((result) => (
             <button key={result.path} className="uwb-search-result" onClick={() => {
               props.onOpen({ name: result.name, path: result.path, dir: false })
@@ -493,7 +496,7 @@ function WorkspaceSearch(props: {
               <span><strong>{result.name}</strong><small>{result.relative}</small></span>
             </button>
           ))}
-          {truncated ? <div className="uwb-search-status">仅显示前 {results.length} 项，请输入更具体的名称</div> : null}
+          {truncated ? <div className="uwb-search-status">{t('limitedResults', { count: results.length })}</div> : null}
         </div>
       ) : null}
     </div>
@@ -501,6 +504,7 @@ function WorkspaceSearch(props: {
 }
 
 function FileViewer(props: { sessionId: string; cwd: string | null; file: FsTreeEntry | null }): ReactNode {
+  const { t } = useI18n()
   const [content, setContent] = useState<{ path: string; text: string; truncated: boolean; nextOffset: number } | null>(null)
   const [err, setErr] = useState('')
   const [loadingMore, setLoadingMore] = useState(false)
@@ -517,9 +521,9 @@ function FileViewer(props: { sessionId: string; cwd: string | null; file: FsTree
     setErr('')
     api.readFile(props.sessionId, props.cwd, props.file.path).then((r) => {
       if (live) setContent({ path: r.path, text: r.content, truncated: r.truncated, nextOffset: r.nextOffset })
-    }).catch((e: Error) => { if (live) setErr(e.message) })
+    }).catch(() => { if (live) setErr(t('readFileFailed')) })
     return () => { live = false }
-  }, [props.sessionId, props.cwd, props.file])
+  }, [props.sessionId, props.cwd, props.file, t])
 
   const loadMore = useCallback(async (): Promise<void> => {
     if (props.file == null || content == null || !content.truncated || loadingMore) return
@@ -532,12 +536,12 @@ function FileViewer(props: { sessionId: string; cwd: string | null; file: FsTree
         truncated: next.truncated,
         nextOffset: next.nextOffset,
       })
-    } catch (reason) {
-      setErr(reason instanceof Error ? reason.message : '读取文件失败')
+    } catch {
+      setErr(t('readFileFailed'))
     } finally {
       setLoadingMore(false)
     }
-  }, [content, loadingMore, props.cwd, props.file, props.sessionId])
+  }, [content, loadingMore, props.cwd, props.file, props.sessionId, t])
 
   useEffect(() => {
     const node = moreSentinel.current
@@ -549,9 +553,9 @@ function FileViewer(props: { sessionId: string; cwd: string | null; file: FsTree
     return () => observer.disconnect()
   }, [content?.truncated, lazy.limit, lines.length, loadMore, loadingMore])
 
-  if (props.file == null) return <EmptyState icon="files" title="选择一个文件" detail="从左侧项目树中打开文件进行预览" />
+  if (props.file == null) return <EmptyState icon="files" title={t('selectFile')} detail={t('selectFileDetail')} />
   if (err) return <div className="uwb-empty uwb-err">{err}</div>
-  if (content === null) return <div className="uwb-empty">读取中…</div>
+  if (content === null) return <div className="uwb-empty">{t('reading')}</div>
 
   return (
     <div className="uwb-document">
@@ -560,10 +564,10 @@ function FileViewer(props: { sessionId: string; cwd: string | null; file: FsTree
           <strong>{fileName(content.path)}</strong>
         </div>
         <div className="uwb-file-actions">
-          <button className="uwb-icon-btn" onClick={() => void navigator.clipboard?.writeText(content.path)} title="复制文件路径" aria-label="复制文件路径"><Icon name="copy" size={15} /></button>
+          <button className="uwb-icon-btn" onClick={() => void navigator.clipboard?.writeText(content.path)} title={t('copyFilePath')} aria-label={t('copyFilePath')}><Icon name="copy" size={15} /></button>
         </div>
       </div>
-      {content.truncated ? <div className="uwb-notice">文件较大，内容将在滚动时分块加载</div> : null}
+      {content.truncated ? <div className="uwb-notice">{t('largeFile')}</div> : null}
       <div className="uwb-code-view uwb-wrap">
         {lines.slice(0, lazy.limit).map((ln, i) => (
           <div className="uwb-line" key={i}>
@@ -571,8 +575,8 @@ function FileViewer(props: { sessionId: string; cwd: string | null; file: FsTree
             <span className="uwb-lc uwb-highlight">{highlighted === null ? (ln || ' ') : <span dangerouslySetInnerHTML={{ __html: highlighted[i] || ' ' }} />}</span>
           </div>
         ))}
-        {lazy.limit < lines.length ? <div ref={lazy.sentinel} className="uwb-lazy-status">已显示 {lazy.limit} / {lines.length} 行 · 向下滚动继续加载</div> : null}
-        {content.truncated && lazy.limit >= lines.length ? <div ref={moreSentinel} className="uwb-lazy-status">{loadingMore ? '正在读取下一段…' : '继续滚动以读取下一段'}</div> : null}
+        {lazy.limit < lines.length ? <div ref={lazy.sentinel} className="uwb-lazy-status">{t('shownLines', { shown: lazy.limit, total: lines.length })}</div> : null}
+        {content.truncated && lazy.limit >= lines.length ? <div ref={moreSentinel} className="uwb-lazy-status">{loadingMore ? t('readingNext') : t('continueReading')}</div> : null}
       </div>
     </div>
   )
@@ -617,6 +621,7 @@ function GitTreeNodeView(props: { node: GitTreeEntry; onOpen: (node: GitTreeEntr
 }
 
 function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode {
+  const { t } = useI18n()
   const [branchList, setBranchList] = useState<string[]>([])
   const [currentBranch, setCurrentBranch] = useState('')
   const [viewMode, setViewMode] = useState<'work' | 'last'>('work')
@@ -634,6 +639,8 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
   const [sidebarWidth, setSidebarWidth] = useState(238)
   const diffRequest = useRef(0)
 
+  useEffect(() => { setErr(''); setDiffErr('') }, [t])
+
   const refresh = useCallback(async (): Promise<void> => {
     setErr('')
     const refFor = ref || 'HEAD'
@@ -649,7 +656,7 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
     setLastFiles(l)
   }, [props.sessionId, props.cwd, ref])
 
-  useEffect(() => { void refresh().catch((e: Error) => setErr(e.message)) }, [refresh])
+  useEffect(() => { void refresh().catch(() => setErr(t('refreshFailed'))) }, [refresh, t])
 
   const loadDiff = useCallback(async (path: string, source: 'work' | 'last', full: boolean): Promise<void> => {
     const request = diffRequest.current + 1
@@ -663,13 +670,13 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
         : await api.gitLastFileDiff(props.sessionId, props.cwd, path, refFor, full)
       if (request !== diffRequest.current) return
       setDiffText(d)
-    } catch (e) {
+    } catch {
       if (request !== diffRequest.current) return
-      setDiffErr(e instanceof Error ? e.message : '读取 diff 失败')
+      setDiffErr(t('readDiffFailed'))
     } finally {
       if (request === diffRequest.current) setLoading(false)
     }
-  }, [props.cwd, props.sessionId, ref])
+  }, [props.cwd, props.sessionId, ref, t])
 
   const openFile = (node: GitTreeEntry, source: 'work' | 'last'): void => {
     if (node.path == null) return
@@ -694,16 +701,16 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
       <div className="uwb-review-sidebar" style={{ width: sidebarWidth }}>
         <div className="uwb-review-search">
           <Icon name="search" size={15} />
-          <input value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="搜索变更文件" aria-label="搜索变更文件" />
-          {filter !== '' ? <button className="uwb-search-clear" onClick={() => setFilter('')} aria-label="清除搜索"><Icon name="close" size={13} /></button> : null}
+          <input value={filter} onChange={(event) => setFilter(event.target.value)} placeholder={t('searchChangedFiles')} aria-label={t('searchChangedFiles')} />
+          {filter !== '' ? <button className="uwb-search-clear" onClick={() => setFilter('')} aria-label={t('clearSearch')}><Icon name="close" size={13} /></button> : null}
         </div>
         <div className="uwb-review-controls">
-          <label className="uwb-control-label">审查范围</label>
+          <label className="uwb-control-label">{t('reviewScope')}</label>
           <select className="uwb-select uwb-select-wide" value={viewMode} onChange={(e) => { setViewMode(e.target.value as 'work' | 'last'); setSel(null); setDiffText(''); setDiffErr('') }}>
-            <option value="work">工作区变更</option>
-            <option value="last">最近一次提交</option>
+            <option value="work">{t('workspaceChanges')}</option>
+            <option value="last">{t('lastCommit')}</option>
           </select>
-          <label className="uwb-control-label">{viewMode === 'work' ? '当前分支' : '提交引用'}</label>
+          <label className="uwb-control-label">{viewMode === 'work' ? t('currentBranch') : t('commitRef')}</label>
           <div className="uwb-select-wrap">
             <Icon name="branch" size={14} />
             <select className="uwb-select uwb-select-wide" disabled={viewMode === 'work'} value={effRef} onChange={(e) => { setRef(e.target.value); setSel(null); setDiffText(''); setDiffErr('') }}>
@@ -712,18 +719,18 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
           </div>
         </div>
         <div className="uwb-changes-head">
-          <span>变更</span><span className="uwb-count-badge">{shownFiles.length}{normalizedFilter === '' ? '' : ` / ${allShownFiles.length}`}</span>
-          <button className="uwb-icon-btn" onClick={() => void refresh()} title="刷新变更" aria-label="刷新变更"><Icon name="refresh" size={14} /></button>
+          <span>{t('changes')}</span><span className="uwb-count-badge">{shownFiles.length}{normalizedFilter === '' ? '' : ` / ${allShownFiles.length}`}</span>
+          <button className="uwb-icon-btn" onClick={() => void refresh()} title={t('refreshChanges')} aria-label={t('refreshChanges')}><Icon name="refresh" size={14} /></button>
         </div>
         <div className="uwb-change-tree">
           {err ? <div className="uwb-empty uwb-err">{err}</div> : null}
-          {shownFiles.length === 0 ? <EmptyState icon="git" title="没有变更" detail={viewMode === 'work' ? '工作区是干净的' : '此提交没有文件变更'} />
+          {shownFiles.length === 0 ? <EmptyState icon="git" title={t('noChanges')} detail={viewMode === 'work' ? t('cleanWorkspace') : t('noCommitChanges')} />
             : tree.map((n, i) => <GitTreeNodeView key={i} node={n} onOpen={(nd) => openFile(nd, viewMode)} selectedPath={sel?.path ?? null} />)}
         </div>
       </div>
-      <ResizeHandle className="uwb-tree-resize" label="调整审查列表宽度" value={sidebarWidth} direction={1} min={190} max={420} onChange={setSidebarWidth} />
+      <ResizeHandle className="uwb-tree-resize" label={t('resizeReviewList')} value={sidebarWidth} direction={1} min={190} max={420} onChange={setSidebarWidth} />
       <div className="uwb-review-main">
-        {sel == null ? <EmptyState icon="git" title="选择一项变更" detail="在左侧选择文件以查看逐行差异" />
+        {sel == null ? <EmptyState icon="git" title={t('selectChange')} detail={t('selectChangeDetail')} />
           : (
             <div className="uwb-document">
               <div className="uwb-document-head">
@@ -733,29 +740,29 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
                   </div>
                   <div className="uwb-file-actions">
                     <div className="uwb-diff-stats"><span className="add">+{additions}</span><span className="del">−{deletions}</span></div>
-                    <button className="uwb-icon-btn" onClick={() => void navigator.clipboard?.writeText(workspaceFilePath(props.cwd, sel.path))} title="复制文件路径" aria-label="复制文件路径"><Icon name="copy" size={15} /></button>
+                    <button className="uwb-icon-btn" onClick={() => void navigator.clipboard?.writeText(workspaceFilePath(props.cwd, sel.path))} title={t('copyFilePath')} aria-label={t('copyFilePath')}><Icon name="copy" size={15} /></button>
                   </div>
                 </div>
                 <div className="uwb-diff-toolbar">
-                  <div className="uwb-segment" role="group" aria-label="差异布局">
-                    <button aria-pressed={diffLayout === 'split'} className={diffLayout === 'split' ? 'on' : ''} onClick={() => setDiffLayout('split')}>显示并排差异</button>
-                    <button aria-pressed={diffLayout === 'unified'} className={diffLayout === 'unified' ? 'on' : ''} onClick={() => setDiffLayout('unified')}>统一格式差异</button>
+                  <div className="uwb-segment" role="group" aria-label={t('diffLayout')}>
+                    <button aria-pressed={diffLayout === 'split'} className={diffLayout === 'split' ? 'on' : ''} onClick={() => setDiffLayout('split')}>{t('splitDiff')}</button>
+                    <button aria-pressed={diffLayout === 'unified'} className={diffLayout === 'unified' ? 'on' : ''} onClick={() => setDiffLayout('unified')}>{t('unifiedDiff')}</button>
                   </div>
-                  <div className="uwb-segment" role="group" aria-label="差异上下文">
+                  <div className="uwb-segment" role="group" aria-label={t('diffContext')}>
                     <button aria-pressed={contextMode === 'all'} className={contextMode === 'all' ? 'on' : ''} onClick={() => {
                       setContextMode('all')
                       void loadDiff(sel.path, sel.source, true)
-                    }}>显示所有行</button>
+                    }}>{t('showAllLines')}</button>
                     <button aria-pressed={contextMode === 'changes'} className={contextMode === 'changes' ? 'on' : ''} onClick={() => {
                       setContextMode('changes')
                       void loadDiff(sel.path, sel.source, false)
-                    }}>隐藏未变更的行</button>
+                    }}>{t('hideUnchanged')}</button>
                   </div>
                 </div>
               </div>
               {diffErr ? <div className="uwb-empty uwb-err">{diffErr}</div> : null}
-              {loading ? <div className="uwb-loading"><span />读取差异…</div>
-                : diffRows.length === 0 ? <EmptyState icon="git" title="没有可显示的差异" detail="文件可能仅存在于暂存区或尚未被 Git 跟踪" />
+              {loading ? <div className="uwb-loading"><span />{t('readingDiff')}</div>
+                : diffRows.length === 0 ? <EmptyState icon="git" title={t('noDiff')} detail={t('noDiffDetail')} />
                   : diffLayout === 'unified' ? (
                     <div className={'uwb-code-view uwb-diff-view' + (contextMode === 'all' ? ' uwb-wrap' : '')}>{diffRows.slice(0, lazy.limit).map((r, i) => (
                       <div className={'uwb-line uwb-diff-' + r.cls} key={i}>
@@ -764,7 +771,7 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
                         <span className="uwb-lc">{r.text || ' '}</span>
                       </div>
                     ))}
-                    {lazy.limit < diffRows.length ? <div ref={lazy.sentinel} className="uwb-lazy-status">已显示 {lazy.limit} / {diffRows.length} 行 · 向下滚动继续加载</div> : null}</div>
+                    {lazy.limit < diffRows.length ? <div ref={lazy.sentinel} className="uwb-lazy-status">{t('shownLines', { shown: lazy.limit, total: diffRows.length })}</div> : null}</div>
                   ) : (
                     <div className={'uwb-split-view' + (contextMode === 'all' ? ' uwb-wrap' : '')}>{splitRows.slice(0, lazy.limit).map((row, index) => row.kind === 'wide' ? (
                       <div className={'uwb-split-wide uwb-diff-' + row.oldClass} key={index}>{row.oldText || ' '}</div>
@@ -774,7 +781,7 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
                         <div className={'uwb-split-side uwb-diff-' + row.newClass + (row.newLine === '' ? ' uwb-diff-empty' : '')}><span className="uwb-ln">{row.newLine}</span><span className="uwb-lc">{row.newText || ' '}</span></div>
                       </div>
                     ))}
-                    {lazy.limit < splitRows.length ? <div ref={lazy.sentinel} className="uwb-lazy-status">已显示 {lazy.limit} / {splitRows.length} 行 · 向下滚动继续加载</div> : null}</div>
+                    {lazy.limit < splitRows.length ? <div ref={lazy.sentinel} className="uwb-lazy-status">{t('shownLines', { shown: lazy.limit, total: splitRows.length })}</div> : null}</div>
                   )}
             </div>
           )}
@@ -784,6 +791,7 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
 }
 
 function Workbench(props: { ctx: Context; ui: ReturnType<typeof createUiStore> }): ReactNode {
+  const { t } = useI18n()
   const ui = useSyncExternalStore(props.ui.subscribe, props.ui.getSnapshot)
   const [sessionList, setSessionList] = useState<{ current?: string; byId: Record<string, { cwd?: string }> }>({ byId: {} })
   const [file, setFile] = useState<FsTreeEntry | null>(null)
@@ -819,6 +827,45 @@ function Workbench(props: { ctx: Context; ui: ReturnType<typeof createUiStore> }
   }, [ui.open, ui.width])
 
   useEffect(() => {
+    let frame = 0
+    let observedHeader: Element | null = null
+    let contentElement: Element | null = null
+    const update = (): void => {
+      const header = document.querySelector('[data-slot="conversation.session.header"] > header')
+      if (header !== observedHeader) {
+        if (observedHeader !== null) resizeObserver.unobserve(observedHeader)
+        observedHeader = header
+        if (header !== null) resizeObserver.observe(header)
+      }
+      const sessionRoot = header?.parentElement?.parentElement
+      const nextContent = [...(sessionRoot?.children ?? [])].find((child) => child !== header?.parentElement && child.getBoundingClientRect().top >= (header?.getBoundingClientRect().bottom ?? 0)) ?? null
+      if (nextContent !== contentElement) {
+        contentElement?.classList.remove('uwb-host-content')
+        contentElement = nextContent
+        contentElement?.classList.add('uwb-host-content')
+      }
+      const top = header?.getBoundingClientRect().bottom ?? 0
+      document.documentElement.style.setProperty('--uwb-top', `${Math.max(0, Math.round(top))}px`)
+    }
+    const schedule = (): void => {
+      window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(update)
+    }
+    const resizeObserver = new ResizeObserver(schedule)
+    const treeObserver = new MutationObserver(schedule)
+    treeObserver.observe(document.body, { childList: true, subtree: true })
+    window.addEventListener('resize', schedule)
+    update()
+    return () => {
+      window.cancelAnimationFrame(frame)
+      resizeObserver.disconnect()
+      treeObserver.disconnect()
+      window.removeEventListener('resize', schedule)
+      contentElement?.classList.remove('uwb-host-content')
+    }
+  }, [])
+
+  useEffect(() => {
     if (!ui.open) return
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') props.ui.set({ open: false })
@@ -833,13 +880,12 @@ function Workbench(props: { ctx: Context; ui: ReturnType<typeof createUiStore> }
 
   return (
     <div className={'uwb-root' + (ui.open ? '' : ' uwb-closed')} style={{ width: ui.width }}>
-      <ResizeHandle className="uwb-resize" label="调整工作台宽度" value={ui.width} direction={-1} min={MIN_WIDTH} max={Math.min(MAX_WIDTH, window.innerWidth)} onChange={(width) => props.ui.set({ width })} />
+      <ResizeHandle className="uwb-resize" label={t('resizeWorkbench')} value={ui.width} direction={-1} min={MIN_WIDTH} max={Math.min(MAX_WIDTH, window.innerWidth)} onChange={(width) => props.ui.set({ width })} />
       <div className="uwb-head">
-        <div className="uwb-tabs" role="tablist" aria-label="工作台视图">
-          <button role="tab" aria-selected={ui.tab === 'tree'} className={'uwb-tab' + (ui.tab === 'tree' ? ' on' : '')} onClick={() => props.ui.set({ tab: 'tree' })}><Icon name="files" size={14} />文件</button>
-          <button role="tab" aria-selected={ui.tab === 'git'} className={'uwb-tab' + (ui.tab === 'git' ? ' on' : '')} onClick={() => props.ui.set({ tab: 'git' })}><Icon name="git" size={14} />审查</button>
+        <div className="uwb-tabs" role="tablist" aria-label={t('workbenchViews')}>
+          <button role="tab" aria-selected={ui.tab === 'tree'} className={'uwb-tab' + (ui.tab === 'tree' ? ' on' : '')} onClick={() => props.ui.set({ tab: 'tree' })}><Icon name="files" size={14} />{t('files')}</button>
+          <button role="tab" aria-selected={ui.tab === 'git'} className={'uwb-tab' + (ui.tab === 'git' ? ' on' : '')} onClick={() => props.ui.set({ tab: 'git' })}><Icon name="git" size={14} />{t('review')}</button>
         </div>
-        <button className="uwb-close uwb-icon-btn" onClick={() => props.ui.set({ open: false })} title="关闭 (Esc)" aria-label="关闭工作台"><Icon name="close" size={16} /></button>
       </div>
       {ui.tab === 'tree' ? (
         <div className="uwb-body">
@@ -847,13 +893,29 @@ function Workbench(props: { ctx: Context; ui: ReturnType<typeof createUiStore> }
             <WorkspaceSearch sessionId={sid} cwd={effectiveCwd} onOpen={setFile} />
             <FileTree sessionId={sid} cwd={effectiveCwd} onOpen={setFile} selectedPath={file?.path ?? null} />
           </div>
-          <ResizeHandle className="uwb-tree-resize" label="调整文件树宽度" value={treeW} direction={1} min={TREE_MIN} max={Math.min(TREE_MAX, ui.width - 160)} onChange={setTreeW} />
+          <ResizeHandle className="uwb-tree-resize" label={t('resizeTree')} value={treeW} direction={1} min={TREE_MIN} max={Math.min(TREE_MAX, ui.width - 160)} onChange={setTreeW} />
           <div className="uwb-view"><FileViewer sessionId={sid} cwd={effectiveCwd} file={file} /></div>
         </div>
       ) : (
         <GitReview sessionId={sid} cwd={effectiveCwd} />
       )}
     </div>
+  )
+}
+
+function WorkbenchToggle(props: { ui: ReturnType<typeof createUiStore> }): ReactNode {
+  const { t } = useI18n()
+  const open = useSyncExternalStore(props.ui.subscribe, () => props.ui.getSnapshot().open)
+  return (
+    <button
+      type="button"
+      className={'uwb-openbtn' + (open ? ' on' : '')}
+      aria-pressed={open}
+      onClick={() => props.ui.set({ open: !open })}
+      title={open ? t('closeFilesReview') : t('openFilesReview')}
+    >
+      <span>{t('filesReview')}</span><Icon name="files" size={12} />
+    </button>
   )
 }
 
@@ -867,27 +929,17 @@ export function apply(ctx: Context): void {
     rootDiv.setAttribute('data-uwb-root', '')
     document.body.appendChild(rootDiv)
     root = createRoot(rootDiv)
-    root.render(<Workbench ctx={ctx} ui={ui} />)
+    root.render(<I18nProvider><Workbench ctx={ctx} ui={ui} /></I18nProvider>)
     return () => {
       root?.unmount()
       rootDiv?.remove()
       document.documentElement.style.setProperty('--uwb-width', '0px')
+      document.documentElement.style.removeProperty('--uwb-top')
     }
   }, 'dsh-ui-workbench: mount')
 
-  ctx.effect(() => ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register(
-    { name: 'conversation.session.header.actions', id: 'ui-workbench', order: 30 },
-    () => {
-      const open = useSyncExternalStore(ui.subscribe, () => ui.getSnapshot().open)
-      return (
-        <button
-          className={'uwb-openbtn' + (open ? ' on' : '')}
-          onClick={() => ui.set({ open: !open })}
-          title={open ? '关闭文件与审查' : '打开文件与审查（右侧面板）'}
-        >
-          <Icon name={open ? 'close' : 'files'} size={15} /><span>{open ? '关闭工作台' : '文件与审查'}</span>
-        </button>
-      )
-    },
+  ctx.effect(() => ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register(
+    { name: 'conversation.session.header.utilities', id: 'ui-workbench', order: 1000 },
+    () => <I18nProvider><WorkbenchToggle ui={ui} /></I18nProvider>,
   )), 'dsh-ui-workbench: header action')
 }
