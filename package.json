@@ -46,14 +46,12 @@
     "lib/types/**/*.d.ts",
     "bin/dsh-ui-workbench.mjs",
     "cordis.patch.yml",
-    "dsh.plugin.json",
-    "README.md",
-    "README.zh.md"
+    "README.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && tsdown",
     "typecheck": "tsc --noEmit",
-    "check": "pnpm typecheck && pnpm build && pnpm verify:package && pnpm pack:check",
+    "check": "pnpm typecheck && pnpm build && pnpm verify:package",
     "pack:check": "npm pack --dry-run --ignore-scripts",
     "verify:package": "node scripts/verify-package.mjs",
     "prepare": "tsdown",

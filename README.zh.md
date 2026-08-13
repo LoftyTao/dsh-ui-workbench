@@ -88,7 +88,7 @@ npm login
 pnpm publish
 ```
 
-`pnpm check` 会验证 npm 的精确文件列表；`prepack` 会再次进行类型检查并生成预编译的 `lib/` 文件。因此普通 npm 安装不会执行本仓库的构建脚本。
+`pnpm check` 会验证 npm 的精确文件列表；`prepack` 会再次进行类型检查并生成预编译的 `lib/` 文件。因此普通 npm 安装不会执行本仓库的构建脚本。发布的压缩包只包含安装器、DSH bundle patch、运行时 bundle、公开类型声明、包元数据、README 和许可证。
 
 ### 手动挂载
 

@@ -631,7 +631,7 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
   const [lastFiles, setLastFiles] = useState<api.GitFileEntry[]>([])
   const [sel, setSel] = useState<{ path: string; source: 'work' | 'last' } | null>(null)
   const [diffText, setDiffText] = useState('')
-  const [diffLayout, setDiffLayout] = useState<'split' | 'unified'>('split')
+  const [diffLayout, setDiffLayout] = useState<'split' | 'unified'>('unified')
   const [contextMode, setContextMode] = useState<'all' | 'changes'>('changes')
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
@@ -640,23 +640,21 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
   const [sidebarWidth, setSidebarWidth] = useState(238)
   const [repository, setRepository] = useState<boolean | null>(null)
   const [creatingRepository, setCreatingRepository] = useState(false)
+  const [reviewRevision, setReviewRevision] = useState(0)
   const refreshRequest = useRef(0)
   const diffRequest = useRef(0)
+  const refreshInFlight = useRef(false)
+  const selectionRef = useRef<typeof sel>(null)
 
   useEffect(() => { setErr(''); setDiffErr('') }, [t])
+  useEffect(() => { selectionRef.current = sel }, [sel])
 
   const refresh = useCallback(async (): Promise<void> => {
+    if (refreshInFlight.current) return
+    refreshInFlight.current = true
     const request = refreshRequest.current + 1
     refreshRequest.current = request
     setErr('')
-    setRepository(null)
-    setCurrentBranch('')
-    setBranchList([])
-    setWorkFiles([])
-    setLastFiles([])
-    setSel(null)
-    setDiffText('')
-    diffRequest.current += 1
     try {
       let initialized: boolean | null = null
       try {
@@ -681,17 +679,44 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
       setBranchList(bs)
       setWorkFiles(w)
       setLastFiles(l)
+
+      const selected = selectionRef.current
+      const selectedFiles = selected?.source === 'work' ? w : l
+      if (selected !== null && !selectedFiles.some((file) => file.path === selected.path)) {
+        setSel(null)
+        setDiffText('')
+        diffRequest.current += 1
+      } else if (selected !== null) {
+        // A status row does not change when an already-modified file is edited
+        // again. Reload the selected diff on every completed poll so its
+        // content, not only the changed-file list, stays current.
+        setReviewRevision((value) => value + 1)
+      }
     } catch {
       if (request === refreshRequest.current) {
         setRepository(true)
         setErr(t('refreshFailed'))
       }
+    } finally {
+      refreshInFlight.current = false
     }
   }, [props.sessionId, props.cwd, ref, t])
 
   useEffect(() => {
     void refresh()
     return () => { refreshRequest.current += 1; diffRequest.current += 1 }
+  }, [refresh])
+
+  useEffect(() => {
+    const update = (): void => { if (document.visibilityState === 'visible') void refresh() }
+    const timer = window.setInterval(update, 2_000)
+    window.addEventListener('focus', update)
+    document.addEventListener('visibilitychange', update)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', update)
+      document.removeEventListener('visibilitychange', update)
+    }
   }, [refresh])
 
   const createRepository = async (): Promise<void> => {
@@ -726,6 +751,11 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
       if (request === diffRequest.current) setLoading(false)
     }
   }, [props.cwd, props.sessionId, ref, t])
+
+  useEffect(() => {
+    const selected = selectionRef.current
+    if (reviewRevision > 0 && selected !== null) void loadDiff(selected.path, selected.source, contextMode === 'all')
+  }, [contextMode, loadDiff, reviewRevision])
 
   const openFile = (node: GitTreeEntry, source: 'work' | 'last'): void => {
     if (node.path == null) return

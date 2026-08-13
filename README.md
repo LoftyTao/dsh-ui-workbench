@@ -88,7 +88,7 @@ npm login
 pnpm publish
 ```
 
-`pnpm check` validates the exact npm file list; the `prepack` hook repeats type checking and produces prebuilt `lib/` files, so normal npm installs never execute this repository's build scripts.
+`pnpm check` validates the exact npm file list; the `prepack` hook repeats type checking and produces prebuilt `lib/` files, so normal npm installs never execute this repository's build scripts. The published tarball contains only the executable installer, DSH bundle patch, runtime bundles, public type declarations, package metadata, README, and license.
 
 ### Manually
 

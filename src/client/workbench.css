@@ -290,6 +290,9 @@ body.uwb-is-resizing, body.uwb-is-resizing * { cursor: col-resize !important; us
 .uwb-diff-stats .add { color: var(--uwb-diff-add-text); background: var(--uwb-diff-add-bg); }
 .uwb-diff-stats .del { color: var(--uwb-diff-del-text); background: var(--uwb-diff-del-bg); }
 .uwb-diff-view { padding-top: 8px; }
+.uwb-code-view.uwb-diff-view { min-width: 100%; }
+.uwb-diff-view .uwb-line { min-width: 0; }
+.uwb-diff-view .uwb-lc { white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
 .uwb-diff-add { color: var(--uwb-diff-add-text); background: var(--uwb-diff-add-bg); }
 .uwb-diff-add .uwb-lc { color: var(--uwb-diff-add-text); }
 .uwb-diff-del { color: var(--uwb-diff-del-text); background: var(--uwb-diff-del-bg); }
@@ -306,15 +309,15 @@ body.uwb-is-resizing, body.uwb-is-resizing * { cursor: col-resize !important; us
 .uwb-segment button:hover { color: var(--uwb-text); background: var(--uwb-hover); }
 .uwb-segment button.on { color: var(--uwb-text); background: var(--uwb-hover); }
 
-.uwb-split-view { min-width: 720px; padding: 8px 0 32px; font-family: var(--uwb-code-font); font-size: 12px; line-height: 20px; }
+.uwb-split-view { min-width: 100%; padding: 8px 0 32px; font-family: var(--uwb-code-font); font-size: 12px; line-height: 20px; }
 .uwb-split-view.uwb-wrap { min-width: 100%; }
 .uwb-split-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 20px; }
 .uwb-split-side { display: flex; min-width: 0; border-right: 1px solid var(--uwb-border); }
 .uwb-split-side:last-child { border-right: 0; }
 .uwb-split-side .uwb-ln { width: 48px; }
-.uwb-split-side .uwb-lc { min-width: max-content; white-space: pre; }
+.uwb-split-side .uwb-lc { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
 .uwb-split-view.uwb-wrap .uwb-split-side .uwb-lc { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
-.uwb-split-wide { min-height: 20px; padding: 0 12px 0 58px; white-space: pre; }
+.uwb-split-wide { min-height: 20px; padding: 0 12px 0 58px; overflow-wrap: anywhere; white-space: pre-wrap; }
 .uwb-split-view.uwb-wrap .uwb-split-wide { white-space: pre-wrap; overflow-wrap: anywhere; }
 .uwb-diff-empty { color: transparent; background: var(--uwb-surface-2); }
 .uwb-lazy-status { min-height: 36px; padding: 9px 16px; color: var(--uwb-faint); background: var(--uwb-surface); border-top: 1px solid var(--uwb-border-soft); font-family: var(--ds-font-family, inherit); font-size: 11px; text-align: center; }
