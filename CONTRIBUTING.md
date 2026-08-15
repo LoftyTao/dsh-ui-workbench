@@ -11,7 +11,10 @@ Thanks for improving the workbench. Keep each change narrow, explain the user-vi
 | `src/git.ts` | Git functions | process invocation and porcelain parsing |
 | `src/wire.ts` | JSON helpers | request validation and stable error envelopes |
 | `src/client/tree.ts` | client tree model | shared folder hierarchy for workspace files and Git changes |
+| `src/client/diff.ts` | diff parser and pairer | colored change rows and unmodified-line markers |
 | `src/client/index.tsx` | `apply(ctx)` | browser UI, state, and slot registration |
+| `src/client/runtime.ts` | runtime owner and persistent state | HMR takeover, disposal, context rebind, and cross-module UI state |
+| `src/client/theme.ts` | `getThemeColorScheme()` / `subscribeTheme()` | optional DSH theme service, DOM theme observation, and disposable fallback listeners |
 | `src/client/i18n.tsx` | `useI18n()` | typed UI messages and locale detection |
 
 Do not make React code call Node APIs or put browser state in the host. The browser talks to the host only through `src/client/api.ts`; the host resolves the session workspace before calling filesystem or Git modules. Keep workspace files and Git changes on the shared path-tree model so folders and nested entries use the same hierarchy.

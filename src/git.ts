@@ -5,6 +5,7 @@
  * locale or color config.
  */
 import { spawn } from 'node:child_process'
+import { StringDecoder } from 'node:string_decoder'
 
 class GitCommandError extends Error {
   readonly exitCode: number | null
@@ -15,26 +16,36 @@ class GitCommandError extends Error {
   }
 }
 
+/** Decode child-process output without splitting a multi-byte UTF-8 character. */
+export function decodeGitChunks(chunks: readonly Buffer[]): string {
+  const decoder = new StringDecoder('utf8')
+  return chunks.map((chunk) => decoder.write(chunk)).join('') + decoder.end()
+}
+
 function runGit(cwd: string, args: string[], timeoutMs = 30_000, acceptedCodes: readonly number[] = [0]): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const child = spawn('git', ['-C', cwd, '--no-pager', '-c', 'color.ui=false', ...args], {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C' },
     })
+    const stdoutDecoder = new StringDecoder('utf8')
+    const stderrDecoder = new StringDecoder('utf8')
     let stdout = ''
     let stderr = ''
     const timer = setTimeout(() => {
       child.kill('SIGKILL')
       reject(new Error(`git ${args[0] ?? ''} timed out`))
     }, timeoutMs)
-    child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString('utf8') })
-    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8') })
+    child.stdout.on('data', (chunk: Buffer) => { stdout += stdoutDecoder.write(chunk) })
+    child.stderr.on('data', (chunk: Buffer) => { stderr += stderrDecoder.write(chunk) })
     child.on('error', (error) => {
       clearTimeout(timer)
       reject(new Error(`cannot run git: ${error.message}`))
     })
     child.on('close', (code) => {
       clearTimeout(timer)
+      stdout += stdoutDecoder.end()
+      stderr += stderrDecoder.end()
       if (code !== null && acceptedCodes.includes(code)) resolve(stdout)
       else reject(new GitCommandError(stderr.trim() || `git exited with ${String(code)}`, code))
     })

@@ -60,3 +60,14 @@ test('git status exposes single-letter Git abbreviations for tracked edits', asy
     await rm(fixture, { recursive: true, force: true })
   }
 })
+
+test('git output keeps UTF-8 characters intact across data chunks', () => {
+  const gitModule = pathToFileURL(resolve(repositoryRoot, 'src/git.ts')).href
+  const output = execFileSync(process.execPath, [
+    '--experimental-strip-types',
+    '--input-type=module',
+    '--eval',
+    `import { decodeGitChunks } from ${JSON.stringify(gitModule)}; const bytes = Buffer.from('发布文件集合', 'utf8'); const parts = []; for (let i = 0; i < bytes.length; i += 1) parts.push(bytes.subarray(i, i + 1)); console.log(JSON.stringify(decodeGitChunks(parts)))`,
+  ], { cwd: repositoryRoot, encoding: 'utf8' })
+  assert.equal(output.trim().split(/\r?\n/).at(-1), '"发布文件集合"')
+})

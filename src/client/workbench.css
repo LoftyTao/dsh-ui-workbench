@@ -1,4 +1,5 @@
-:root {
+/* Resolve aliases on the portalled root so they inherit DSH's body-owned theme tokens. */
+.uwb-root {
   --uwb-bg: var(--dsw-alias-bg-base, #fff);
   --uwb-surface: var(--dsw-specific-sidebar-fill, #f7f8fa);
   --uwb-surface-2: var(--dsw-alias-bg-layer-1, #f2f3f5);
@@ -13,13 +14,25 @@
   --uwb-accent: var(--dsw-alias-brand-primary, #4d6bfe);
   --uwb-green: var(--dsw-alias-state-success-primary, #16a36a);
   --uwb-red: var(--dsw-alias-state-error-primary, #e14b4b);
-  --uwb-amber: var(--dsw-alias-state-warning-primary, #b7791f);
-  /* OpenCode diff palette: packages/ui/src/styles/theme.css. */
-  --uwb-diff-add-bg: light-dark(#e3fae1, #1a2919);
-  --uwb-diff-add-text: light-dark(#3a8437, #9bcd97);
-  --uwb-diff-del-bg: light-dark(#feefeb, #42120b);
-  --uwb-diff-del-text: light-dark(#ed4831, #fc533a);
-  --uwb-diff-modified-text: light-dark(#ff8c00, #ffba92);
+  --uwb-amber: var(--dsw-alias-state-warn-label, #b7791f);
+  /* OpenCode diff palette: packages/ui/src/styles/theme.css. Keep separate
+     base/strong surfaces so line and inline changes remain visible in both themes. */
+  --uwb-diff-add-text: var(--dsw-alias-state-success-primary, light-dark(#3a8437, #9bcd97));
+  --uwb-diff-del-text: var(--dsw-alias-state-error-primary, light-dark(#ed4831, #fc533a));
+  --uwb-diff-add-bg: var(--dsw-alias-state-success-tertiary, light-dark(#e3fae1, #1a2919));
+  --uwb-diff-del-bg: var(--dsw-alias-state-error-tertiary, light-dark(#feefeb, #42120b));
+  --uwb-diff-add-line-bg: var(--uwb-diff-add-bg);
+  --uwb-diff-add-inline-bg: color-mix(in srgb, var(--uwb-diff-add-bg) 70%, var(--dsw-alias-state-success-secondary, var(--uwb-diff-add-text)) 30%);
+  --uwb-diff-del-line-bg: var(--uwb-diff-del-bg);
+  --uwb-diff-del-inline-bg: color-mix(in srgb, var(--uwb-diff-del-bg) 70%, var(--dsw-alias-state-error-secondary, var(--uwb-diff-del-text)) 30%);
+  --uwb-diff-modified-text: var(--dsw-alias-state-warn-label, light-dark(#ff8c00, #ffba92));
+  --uwb-syntax-comment: var(--shiki-token-comment, var(--uwb-faint));
+  --uwb-syntax-punctuation: var(--shiki-token-punctuation, var(--uwb-muted));
+  --uwb-syntax-constant: var(--shiki-token-constant, var(--uwb-accent));
+  --uwb-syntax-string: var(--shiki-token-string, var(--uwb-green));
+  --uwb-syntax-keyword: var(--shiki-token-keyword, var(--uwb-accent));
+  --uwb-syntax-parameter: var(--shiki-token-parameter, var(--uwb-amber));
+  --uwb-syntax-function: var(--shiki-token-function, var(--uwb-accent));
   --uwb-code-font: var(--ds-font-family-code, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace);
 }
 
@@ -42,12 +55,16 @@
   overflow: hidden;
   color: var(--uwb-text);
   background: var(--uwb-bg);
+  color-scheme: light;
   border-left: 1px solid var(--uwb-border);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 13px;
   transform: translateX(0);
   transition: transform var(--ds-transition-duration-slow, 200ms) cubic-bezier(.2, .8, .2, 1);
 }
+
+.uwb-root[data-uwb-color-scheme="dark"] { color-scheme: dark; }
+.uwb-root[data-uwb-color-scheme="light"] { color-scheme: light; }
 
 .uwb-root.uwb-closed { transform: translateX(100%); pointer-events: none; }
 
@@ -293,12 +310,13 @@ body.uwb-is-resizing, body.uwb-is-resizing * { cursor: col-resize !important; us
 .uwb-code-view.uwb-diff-view { min-width: 100%; }
 .uwb-diff-view .uwb-line { min-width: 0; }
 .uwb-diff-view .uwb-lc { white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
-.uwb-diff-add { color: var(--uwb-diff-add-text); background: var(--uwb-diff-add-bg); }
-.uwb-diff-add .uwb-lc { color: var(--uwb-diff-add-text); }
-.uwb-diff-del { color: var(--uwb-diff-del-text); background: var(--uwb-diff-del-bg); }
-.uwb-diff-del .uwb-lc { color: var(--uwb-diff-del-text); }
-.uwb-diff-hunk { margin: 7px 0; color: var(--uwb-accent); background: var(--uwb-active); }
-.uwb-diff-meta { color: var(--uwb-faint); background: var(--uwb-surface); }
+.uwb-diff-add { background: var(--uwb-diff-add-line-bg); }
+.uwb-diff-del { background: var(--uwb-diff-del-line-bg); }
+.uwb-diff-inline-add, .uwb-diff-inline-del { border-radius: 2px; }
+.uwb-diff-inline-add { background: var(--uwb-diff-add-inline-bg); }
+.uwb-diff-inline-del { background: var(--uwb-diff-del-inline-bg); }
+.uwb-diff-gap { min-height: 28px; margin: 7px 0; align-items: center; color: var(--uwb-faint); background: var(--uwb-surface); border-top: 1px solid var(--uwb-border-soft); border-bottom: 1px solid var(--uwb-border-soft); }
+.uwb-diff-gap-label { flex: 1; padding: 4px 12px; font-family: var(--ds-font-family, inherit); font-size: 11px; text-align: center; }
 .uwb-loading { display: flex; min-height: 160px; align-items: center; justify-content: center; gap: 9px; color: var(--uwb-muted); }
 .uwb-loading span { width: 13px; height: 13px; border: 2px solid var(--uwb-border); border-top-color: var(--uwb-accent); border-radius: 50%; animation: uwb-spin .7s linear infinite; }
 @keyframes uwb-spin { to { transform: rotate(360deg); } }
@@ -319,20 +337,21 @@ body.uwb-is-resizing, body.uwb-is-resizing * { cursor: col-resize !important; us
 .uwb-split-view.uwb-wrap .uwb-split-side .uwb-lc { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
 .uwb-split-wide { min-height: 20px; padding: 0 12px 0 58px; overflow-wrap: anywhere; white-space: pre-wrap; }
 .uwb-split-view.uwb-wrap .uwb-split-wide { white-space: pre-wrap; overflow-wrap: anywhere; }
+.uwb-split-wide.uwb-diff-gap { padding: 4px 12px; color: var(--uwb-faint); background: var(--uwb-surface); border-top: 1px solid var(--uwb-border-soft); border-bottom: 1px solid var(--uwb-border-soft); font-family: var(--ds-font-family, inherit); font-size: 11px; text-align: center; }
 .uwb-diff-empty { color: transparent; background: var(--uwb-surface-2); }
 .uwb-lazy-status { min-height: 36px; padding: 9px 16px; color: var(--uwb-faint); background: var(--uwb-surface); border-top: 1px solid var(--uwb-border-soft); font-family: var(--ds-font-family, inherit); font-size: 11px; text-align: center; }
 
 /* Prism tokens intentionally resolve through the Harness palette so syntax
    remains legible in both themes without introducing an editor surface. */
-.uwb-highlight .token.comment, .uwb-highlight .token.prolog, .uwb-highlight .token.doctype, .uwb-highlight .token.cdata { color: var(--uwb-faint); font-style: italic; }
-.uwb-highlight .token.punctuation { color: var(--uwb-muted); }
-.uwb-highlight .token.property, .uwb-highlight .token.tag, .uwb-highlight .token.constant, .uwb-highlight .token.symbol, .uwb-highlight .token.deleted { color: var(--uwb-red); }
-.uwb-highlight .token.boolean, .uwb-highlight .token.number { color: #b86b2c; }
-.uwb-highlight .token.selector, .uwb-highlight .token.attr-name, .uwb-highlight .token.string, .uwb-highlight .token.char, .uwb-highlight .token.builtin, .uwb-highlight .token.inserted { color: var(--uwb-green); }
-.uwb-highlight .token.operator, .uwb-highlight .token.entity, .uwb-highlight .token.url, .uwb-highlight .language-css .token.string, .uwb-highlight .style .token.string { color: #8b5cf6; }
-.uwb-highlight .token.atrule, .uwb-highlight .token.attr-value, .uwb-highlight .token.keyword { color: #7c5ce7; }
-.uwb-highlight .token.function, .uwb-highlight .token.class-name { color: #2f6fca; }
-.uwb-highlight .token.regex, .uwb-highlight .token.important, .uwb-highlight .token.variable { color: #b7791f; }
+.uwb-highlight .token.comment, .uwb-highlight .token.prolog, .uwb-highlight .token.doctype, .uwb-highlight .token.cdata { color: var(--uwb-syntax-comment); font-style: italic; }
+.uwb-highlight .token.punctuation { color: var(--uwb-syntax-punctuation); }
+.uwb-highlight .token.property, .uwb-highlight .token.tag, .uwb-highlight .token.constant, .uwb-highlight .token.symbol, .uwb-highlight .token.deleted { color: var(--uwb-diff-del-text); }
+.uwb-highlight .token.boolean, .uwb-highlight .token.number { color: var(--uwb-syntax-constant); }
+.uwb-highlight .token.selector, .uwb-highlight .token.attr-name, .uwb-highlight .token.string, .uwb-highlight .token.char, .uwb-highlight .token.builtin, .uwb-highlight .token.inserted { color: var(--uwb-syntax-string); }
+.uwb-highlight .token.operator, .uwb-highlight .token.entity, .uwb-highlight .token.url, .uwb-highlight .language-css .token.string, .uwb-highlight .style .token.string { color: var(--uwb-syntax-punctuation); }
+.uwb-highlight .token.atrule, .uwb-highlight .token.attr-value, .uwb-highlight .token.keyword { color: var(--uwb-syntax-keyword); }
+.uwb-highlight .token.function, .uwb-highlight .token.class-name { color: var(--uwb-syntax-function); }
+.uwb-highlight .token.regex, .uwb-highlight .token.important, .uwb-highlight .token.variable { color: var(--uwb-syntax-parameter); }
 .uwb-highlight .token.bold, .uwb-highlight .token.important { font-weight: 650; }
 .uwb-highlight .token.italic { font-style: italic; }
 
