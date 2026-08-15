@@ -46,10 +46,10 @@ The Browser entry uses a global runtime owner for the React root, slot contribut
 Requires Node.js 22.19+ and DeepSeek Harness with the `web` profile.
 
 ```sh
-npx -y --package @deepseek-ai/dsh dsh plugin --profile web add github:LoftyTao/dsh-ui-workbench#v0.1.0
+npx -y --package @deepseek-ai/dsh dsh plugin --profile web add github:LoftyTao/dsh-ui-workbench#v0.2.0
 ```
 
-GitHub installs build from source; allow the `prepare` script when DSH prompts. After adding the package to the `web` profile, source builds are claimed by HMR in the same Web process; the theme integration adds no restart step, and one page load creates the initial Browser aggregate.
+Use the `v0.2.0` tag to install the hot-reload, Git review, and light/dark theme features from this release. GitHub installs build from source; allow the `prepare` script when DSH prompts. After adding the package to the `web` profile, source builds are claimed by HMR in the same Web process; the theme integration adds no restart step, and one page load creates the initial Browser aggregate.
 
 ## License
 
