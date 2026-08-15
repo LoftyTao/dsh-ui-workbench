@@ -56,6 +56,18 @@ export interface GitFileEntry {
   path: string
 }
 
+function displayStatusCode(code: string): string {
+  const normalized = code.length === 2 ? code : code.trim()
+  if (normalized === '??') return 'U'
+  const indexStatus = normalized.charAt(0)
+  const worktreeStatus = normalized.charAt(1)
+  const status = indexStatus !== '' && indexStatus !== ' ' ? indexStatus : worktreeStatus
+  if (status === '?') return 'U'
+  return status === 'A' || status === 'C' || status === 'D' || status === 'M' || status === 'R' || status === 'T' || status === 'U'
+    ? status
+    : '?'
+}
+
 export async function branch(cwd: string): Promise<string> {
   try {
     const out = await runGit(cwd, ['branch', '--show-current'])
@@ -74,10 +86,14 @@ export async function branches(cwd: string): Promise<string[]> {
   }
 }
 
-/** Working-tree changed files (index + worktree, untracked included). */
+/** Working-tree changed files (index + worktree, every untracked file included). */
 export async function statusFiles(cwd: string): Promise<GitFileEntry[]> {
   if (!(await isRepository(cwd))) return []
-  const out = await runGit(cwd, ['status', '--porcelain=v1', '--untracked-files=normal'])
+  // `normal` collapses an untracked directory to `?? directory/`, which
+  // prevents the client tree from reconstructing the changed files below it.
+  // Ask Git for every untracked file so the same path hierarchy is available
+  // to the review tree as to the workspace file tree.
+  const out = await runGit(cwd, ['status', '--porcelain=v1', '--untracked-files=all'])
   const files: GitFileEntry[] = []
   for (const line of out.split('\n')) {
     if (line === '') continue
@@ -88,7 +104,7 @@ export async function statusFiles(cwd: string): Promise<GitFileEntry[]> {
       if (arrow !== -1) path = path.slice(arrow + 4)
     }
     path = path.trim()
-    if (path !== '') files.push({ code: code.trim() || '?', path })
+    if (path !== '') files.push({ code: displayStatusCode(code), path })
   }
   return files
 }

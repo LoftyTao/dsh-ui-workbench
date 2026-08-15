@@ -6,6 +6,23 @@
 
 DeepSeek Harness 的 WebUI 插件。在会话页右侧增加一个面板，提供当前会话工作区的文件树、带行号的文件查看器与 Git 审查。
 
+## DSH 元数据
+
+| 字段 | 值 |
+| --- | --- |
+| Family | DSH UI |
+| Category | Client |
+| Role | Client |
+| Capability | 工作区文件浏览与 Git 审查 |
+| Provides | Host `/sidebar/api/*` 路由与 Browser 侧 Workbench 面板 |
+| Injects | Host：`webServer`、`sessions`；Client：`slots`、`sessions`、`@deepseek-ai/dsh-client-runtime`、`@deepseek-ai/dsh-client-ui-slots` |
+| Config | Host `Config` 当前为空对象；面板宽度、主题和语言由 Browser 状态管理 |
+| Credential Boundary | 不保存凭据；通过会话作用域的 DSH Host 工作区服务访问文件与 Git 状态 |
+| Model Experience | 在会话页提供可见的工作区审查面板 |
+| Dependency | DSH `0.1.0-rc.6`、Node `>=22.19`、`pnpm@11.21.0`、React 18、Client Runtime |
+| Status | Experimental |
+| 适用范围 | `web` profile、DSH Web Client、当前会话工作区 |
+
 ![WebUI 插件界面截图](https://raw.githubusercontent.com/LoftyTao/dsh-ui-workbench/main/assets/workbench.png)
 
 ## 功能
@@ -13,12 +30,38 @@ DeepSeek Harness 的 WebUI 插件。在会话页右侧增加一个面板，提�
 - 当前会话工作区的文件树与文件名搜索
 - 带行号、语法高亮和长行换行的 UTF-8 文件查看器
 - 已暂存、未暂存、未跟踪文件及提交引用的 Git 差异审查
+- 使用 Git 状态缩写 `M`、`A`、`D`、`R`、`C`、`T`、`U` 表达编辑状态；未跟踪文件使用 `U` 语义显示
 - 统一和并排差异视图、变更文件筛选、上下文折叠
 - 中英文与亮暗主题适配
 
+## Provides / Model Experience
+
+Host 入口负责会话作用域、路径安全、文件读取和 Git 操作；Browser 入口负责文件树、变更树、文件查看器和差异视图。文件浏览与 Git 审查共用目录树模型，目录、嵌套文件和刷新后的展开状态保持一致。
+
+Git 审查在初次加载、手动刷新、会话或引用变化以及窗口重新可见时更新。选中的变更文件仍然存在时，刷新保留当前 diff；固定时间轮询保持关闭。
+
+## Injects / Config
+
+Host Function Plugin 使用 `webServer` 与 `sessions` 声明式注入，并导出空对象 `Config`。Client 入口使用 `slots` 与 `sessions`，通过 `dsh.client` 声明平台服务。所有 Host 路由通过 `ctx.effect()` 注册并由 disposal 函数卸载。
+
+## 设计边界
+
+浏览器只能通过 `src/client/api.ts` 访问 Host；Git 命令集中在 `src/git.ts`，文件系统访问集中在 `src/fs.ts`，路径树构建集中在 `src/client/tree.ts`。插件提供工作区审查界面，不承担 Git 提交、凭据保存或通用文件编辑职责。
+
+## 测试与验收
+
+```sh
+pnpm check
+pnpm pack:check
+dsh plugin --profile web add ./plugins/client/dsh-ui-workbench
+dsh --profile web --dump-config
+```
+
+测试覆盖 Git 未跟踪目录展开、共享目录树、Host Loader 契约和路由 HMR disposal；包校验覆盖根入口、`./client`、`./invariant`、类型声明、patch 和 README。
+
 ## 安装
 
-需要 Node.js 20+ 与带 `web` profile 的 DeepSeek Harness。
+需要 Node.js 22.19+ 与带 `web` profile 的 DeepSeek Harness。
 
 ```sh
 npx -y --package @deepseek-ai/dsh dsh plugin --profile web add github:LoftyTao/dsh-ui-workbench#v0.1.0

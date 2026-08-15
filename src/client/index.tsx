@@ -23,11 +23,13 @@ import 'prismjs/components/prism-markdown'
 import 'prismjs/components/prism-yaml'
 import 'prismjs/components/prism-sql'
 import type { Context } from '../context-types.ts'
+import { CLIENT_INJECT } from '../invariant.ts'
 import * as api from './api.ts'
 import { I18nProvider, useI18n } from './i18n.tsx'
+import { buildDirTree, buildGitTree, type FsTreeEntry, type GitTreeEntry } from './tree.ts'
 import './workbench.css'
 
-export const inject = ['slots', 'sessions']
+export const inject = CLIENT_INJECT
 
 const DEFAULT_WIDTH = 720
 const MIN_WIDTH = 320
@@ -77,6 +79,13 @@ function Icon(props: { name: IconName; size?: number; className?: string }): Rea
 
 function fileName(path: string): string {
   return path.split(/[\\/]/).filter(Boolean).pop() ?? path
+}
+
+function gitStatusLabel(code: string | null): string {
+  const normalized = (code ?? '').replace(/\s/g, '')
+  if (normalized === '??' || normalized === 'U') return 'U'
+  const first = normalized.charAt(0)
+  return ['A', 'C', 'D', 'M', 'R', 'T', 'U'].includes(first) ? first : '?'
 }
 
 function workspaceFilePath(cwd: string | null, path: string): string {
@@ -230,49 +239,6 @@ function splitLines(text: string): string[] {
   return lines
 }
 
-interface FsTreeEntry {
-  name: string
-  dir: boolean
-  path: string
-}
-
-function buildDirTree(files: api.FsEntry[], rootPath: string): FsTreeEntry[] {
-  return files.map((f) => ({
-    name: f.name,
-    dir: f.dir,
-    path: rootPath.replace(/[\\/]+$/, '') + '/' + f.name,
-  }))
-}
-
-interface GitTreeEntry {
-  name: string
-  dir: boolean
-  path: string | null
-  code: string | null
-  children: GitTreeEntry[] | null
-}
-
-function buildGitTree(files: api.GitFileEntry[]): GitTreeEntry[] {
-  const root: GitTreeEntry = { name: '', dir: true, path: null, code: null, children: [] }
-  for (const f of files) {
-    const parts = f.path.split(/[\\/]/).filter((p) => p !== '')
-    let node: GitTreeEntry = root
-    parts.forEach((name, i) => {
-      const isLeaf = i === parts.length - 1
-      const children = node.children!
-      let child = children.find((c) => c.name === name && c.dir === !isLeaf)
-      if (child === undefined) {
-        child = isLeaf
-          ? { name, dir: false, path: f.path, code: f.code, children: null }
-          : { name, dir: true, path: null, code: null, children: [] }
-        children.push(child)
-      }
-      node = child
-    })
-  }
-  return root.children ?? []
-}
-
 interface DiffRow {
   cls: 'hunk' | 'meta' | 'add' | 'del' | 'ctx'
   old: string
@@ -397,8 +363,8 @@ function FsTreeNode(props: {
       {expanded ? (
         <div className="uwb-children">
           {loading ? <div className="uwb-empty">{t('loading')}</div>
-            : (children ?? []).map((c, i) => (
-              <FsTreeNode key={i} entry={c} onOpen={props.onOpen} selectedPath={props.selectedPath} sessionId={props.sessionId} cwd={props.cwd} />
+            : (children ?? []).map((c) => (
+              <FsTreeNode key={c.path} entry={c} onOpen={props.onOpen} selectedPath={props.selectedPath} sessionId={props.sessionId} cwd={props.cwd} />
             ))}
         </div>
       ) : null}
@@ -429,8 +395,8 @@ function FileTree(props: { sessionId: string; cwd: string | null; onOpen: (entry
   return (
     <div className="uwb-tree-content">
       {err ? <div className="uwb-empty uwb-err">{err}</div>
-        : rootEntries.map((c, i) => (
-          <FsTreeNode key={i} entry={c} onOpen={props.onOpen} selectedPath={props.selectedPath} sessionId={props.sessionId} cwd={props.cwd} />
+        : rootEntries.map((c) => (
+          <FsTreeNode key={c.path} entry={c} onOpen={props.onOpen} selectedPath={props.selectedPath} sessionId={props.sessionId} cwd={props.cwd} />
         ))}
     </div>
   )
@@ -597,8 +563,8 @@ function GitTreeNodeView(props: { node: GitTreeEntry; onOpen: (node: GitTreeEntr
   const [expanded, setExpanded] = useState(false)
   const isLeaf = props.node.dir === false
   const sel = props.selectedPath === props.node.path
-  const first = String(props.node.code ?? '').charAt(0).trim()
-  const codeClass = first === 'A' ? 'A' : first === 'D' ? 'D' : (first === 'M' || first === 'R') ? 'M' : 'U'
+  const status = gitStatusLabel(props.node.code)
+  const codeClass = status === 'A' ? 'A' : status === 'D' ? 'D' : (status === 'C' || status === 'M' || status === 'R' || status === 'T') ? 'M' : 'U'
   return (
     <div>
       <div
@@ -607,13 +573,13 @@ function GitTreeNodeView(props: { node: GitTreeEntry; onOpen: (node: GitTreeEntr
       >
         <span className={'uwb-chevron' + (expanded ? ' expanded' : '')}>{isLeaf ? null : <Icon name="chevron" size={13} />}</span>
         {isLeaf ? <FileTypeIcon name={props.node.name} size={16} /> : <FolderFileIcon className="uwb-file-icon" width={16} height={16} aria-hidden="true" />}
-        {isLeaf ? <span className={'uwb-code ' + codeClass}>{String(props.node.code ?? '?').replace(/\s/g, '') || '?'}</span> : null}
+        {isLeaf ? <span className={'uwb-code ' + codeClass}>{status}</span> : null}
         <span className="uwb-row-label">{props.node.name}</span>
       </div>
       {!isLeaf && expanded ? (
         <div className="uwb-children">
-          {(props.node.children ?? []).map((c, i) => (
-            <GitTreeNodeView key={i} node={c} onOpen={props.onOpen} selectedPath={props.selectedPath} />
+          {(props.node.children ?? []).map((c) => (
+            <GitTreeNodeView key={c.path ?? c.name} node={c} onOpen={props.onOpen} selectedPath={props.selectedPath} />
           ))}
         </div>
       ) : null}
@@ -709,11 +675,9 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
 
   useEffect(() => {
     const update = (): void => { if (document.visibilityState === 'visible') void refresh() }
-    const timer = window.setInterval(update, 2_000)
     window.addEventListener('focus', update)
     document.addEventListener('visibilitychange', update)
     return () => {
-      window.clearInterval(timer)
       window.removeEventListener('focus', update)
       document.removeEventListener('visibilitychange', update)
     }
@@ -819,7 +783,7 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
         <div className="uwb-change-tree">
           {err ? <div className="uwb-empty uwb-err">{err}</div> : null}
           {shownFiles.length === 0 ? <EmptyState icon="git" title={t('noChanges')} detail={viewMode === 'work' ? t('cleanWorkspace') : t('noCommitChanges')} />
-            : tree.map((n, i) => <GitTreeNodeView key={i} node={n} onOpen={(nd) => openFile(nd, viewMode)} selectedPath={sel?.path ?? null} />)}
+            : tree.map((n) => <GitTreeNodeView key={n.path ?? n.name} node={n} onOpen={(nd) => openFile(nd, viewMode)} selectedPath={sel?.path ?? null} />)}
         </div>
       </div>
       <ResizeHandle className="uwb-tree-resize" label={t('resizeReviewList')} value={sidebarWidth} direction={1} min={190} max={420} onChange={setSidebarWidth} />

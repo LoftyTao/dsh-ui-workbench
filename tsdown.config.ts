@@ -116,6 +116,16 @@ export default [
     clean: false,
   },
   {
+    entry: { invariant: 'src/invariant.ts' },
+    outDir: 'lib',
+    format: ['esm'],
+    platform: 'neutral',
+    target: 'es2024',
+    fixedExtension: false,
+    dts: false,
+    clean: false,
+  },
+  {
     entry: { client: 'src/client/index.tsx' },
     outDir: 'lib',
     format: 'cjs',

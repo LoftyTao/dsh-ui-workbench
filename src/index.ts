@@ -11,14 +11,20 @@
  */
 import { realpath, stat } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { Config } from './config.ts'
+import type { Config as WorkbenchConfig } from './config.ts'
 import type { Context } from './context-types.ts'
 import { listDirectory, readTextFile, searchFiles } from './fs.ts'
 import * as git from './git.ts'
+import { assertWorkbenchInvariant, HOST_INJECT, PLUGIN_NAME } from './invariant.ts'
 import { readJsonBody, requireString, WorkbenchError, writeError, writeJson } from './wire.ts'
 
-export const name = 'dsh-ui-workbench'
+export { Config }
+export type { WorkbenchConfig }
 
-export const inject = ['webServer', 'sessions']
+export const name = PLUGIN_NAME
+
+export const inject = HOST_INJECT
 
 /** Resolve an existing session's workspace once, canonicalizing symlinks. */
 async function workspaceRootOf(ctx: Context, sessionId: string): Promise<string> {
@@ -82,7 +88,7 @@ interface HandlerArgs {
   offset?: number
 }
 
-export function apply(ctx: Context): void {
+export function apply(ctx: Context, _config: WorkbenchConfig): void {
   async function handle(
     req: import('node:http').IncomingMessage,
     res: import('node:http').ServerResponse,
@@ -192,6 +198,8 @@ export function apply(ctx: Context): void {
       },
     },
   ]
+
+  assertWorkbenchInvariant({ name, inject, routes: routes.map((route) => route.path) })
 
   for (const route of routes) {
     ctx.effect(() => ctx.webServer.register({

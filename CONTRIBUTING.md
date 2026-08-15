@@ -10,10 +10,13 @@ Thanks for improving the workbench. Keep each change narrow, explain the user-vi
 | `src/fs.ts` | filesystem functions | directory listing, bounded text reads, file-name search |
 | `src/git.ts` | Git functions | process invocation and porcelain parsing |
 | `src/wire.ts` | JSON helpers | request validation and stable error envelopes |
+| `src/client/tree.ts` | client tree model | shared folder hierarchy for workspace files and Git changes |
 | `src/client/index.tsx` | `apply(ctx)` | browser UI, state, and slot registration |
 | `src/client/i18n.tsx` | `useI18n()` | typed UI messages and locale detection |
 
-Do not make React code call Node APIs or put browser state in the host. The browser talks to the host only through `src/client/api.ts`; the host resolves the session workspace before calling filesystem or Git modules.
+Do not make React code call Node APIs or put browser state in the host. The browser talks to the host only through `src/client/api.ts`; the host resolves the session workspace before calling filesystem or Git modules. Keep workspace files and Git changes on the shared path-tree model so folders and nested entries use the same hierarchy.
+
+Git review refreshes on initial load, explicit user action, session/ref changes, and a visible-window return event. Keep the review mounted without a fixed polling timer; preserve the selected diff while refreshing its file list and reload it only when the selected entry remains available.
 
 ## i18n
 
@@ -23,6 +26,7 @@ Do not make React code call Node APIs or put browser state in the host. The brow
 
 ```sh
 pnpm typecheck
+pnpm test
 pnpm build
 pnpm pack:check
 ```
