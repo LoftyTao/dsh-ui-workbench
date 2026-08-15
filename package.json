@@ -1,6 +1,6 @@
 {
   "name": "dsh-ui-workbench",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "DSH web plugin: a right-side workbench panel (file tree / file viewer / git review) with a draggable-width side panel that coexists with the official tool-details panel.",
   "repository": {
     "type": "git",

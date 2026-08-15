@@ -69,10 +69,10 @@ dsh --profile web --dump-config
 需要 Node.js 22.19+ 与带 `web` profile 的 DeepSeek Harness。
 
 ```sh
-npx -y --package @deepseek-ai/dsh dsh plugin --profile web add github:LoftyTao/dsh-ui-workbench#v0.1.0
+npx -y --package @deepseek-ai/dsh dsh plugin --profile web add github:LoftyTao/dsh-ui-workbench#v0.2.0
 ```
 
-GitHub 安装会从源码构建，请在 DSH 提示时允许 `prepare` 脚本。将包加入 `web` profile 后，源码构建由 HMR 在同一 Web 进程接管；主题适配不增加重启步骤，页面加载一次即可完成初始 Browser aggregate。
+使用 `v0.2.0` tag 安装本轮热重载、Git 审查和亮暗主题特性。GitHub 安装会从源码构建，请在 DSH 提示时允许 `prepare` 脚本。将包加入 `web` profile 后，源码构建由 HMR 在同一 Web 进程接管；主题适配不增加重启步骤，页面加载一次即可完成初始 Browser aggregate。
 
 ## 许可证
 
