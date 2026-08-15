@@ -6,8 +6,8 @@
  * The client bundle replicates the official DSH client-bundle preset:
  * externals resolve through the module table at runtime (react, cordis,
  * the platform slot/runtime modules), everything else is inlined, CSS files
- * compile to injected <style data-plugin> tags, and a purity gate rejects any
- * @deepseek-ai value import that is not a module-table entry or an
+ * compile to installable <style data-plugin> tags, and a purity gate rejects
+ * any @deepseek-ai value import that is not a module-table entry or an
  * inline-safe wire layer (cross-plugin collaboration goes through cordis
  * services, never value imports).
  */
@@ -44,12 +44,16 @@ function injectTag(pluginId: string, fileId: string, cssText: string): string {
   return [
     `const css = ${JSON.stringify(cssText)};`,
     `const tagId = ${JSON.stringify(tagId)};`,
-    `if (typeof document !== 'undefined' && document.querySelector('style[data-plugin-css=' + JSON.stringify(tagId) + ']') === null) {`,
-    `  const tag = document.createElement('style');`,
+    `export function installStyle() {`,
+    `  if (typeof document === 'undefined') return () => {};`,
+    `  const tag = [...document.head.querySelectorAll('style')].find((candidate) => candidate.dataset.pluginCss === tagId) ?? document.createElement('style');`,
+    `  const owner = tagId + ':' + Math.random().toString(36).slice(2);`,
     `  tag.dataset.plugin = ${JSON.stringify(pluginId)};`,
     `  tag.dataset.pluginCss = tagId;`,
+    `  tag.dataset.pluginCssOwner = owner;`,
     `  tag.textContent = css;`,
-    `  document.head.appendChild(tag);`,
+    `  if (!tag.isConnected) document.head.appendChild(tag);`,
+    `  return () => { if (tag.dataset.pluginCssOwner === owner) tag.remove(); };`,
     `}`,
   ].join('\n')
 }
@@ -97,7 +101,7 @@ function makeCssPlugin(pluginId: string): NonNullable<UserConfig['plugins']> {
         for (const [local, exp] of Object.entries(cssExports ?? {})) classMap[local] = exp.name
         return [injectTag(pluginId, fileId, code.toString()), `export default ${JSON.stringify(classMap)};`].join('\n')
       }
-      return [injectTag(pluginId, fileId, source.toString('utf8')), 'export default "";'].join('\n')
+      return [injectTag(pluginId, fileId, source.toString('utf8')), 'export default installStyle;'].join('\n')
     },
   }
 }
@@ -110,6 +114,16 @@ export default [
     outDir: 'lib',
     format: ['esm'],
     platform: 'node',
+    target: 'es2024',
+    fixedExtension: false,
+    dts: false,
+    clean: false,
+  },
+  {
+    entry: { invariant: 'src/invariant.ts' },
+    outDir: 'lib',
+    format: ['esm'],
+    platform: 'neutral',
     target: 'es2024',
     fixedExtension: false,
     dts: false,

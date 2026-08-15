@@ -23,13 +23,27 @@ import 'prismjs/components/prism-markdown'
 import 'prismjs/components/prism-yaml'
 import 'prismjs/components/prism-sql'
 import type { Context } from '../context-types.ts'
+import { CLIENT_INJECT } from '../invariant.ts'
 import * as api from './api.ts'
 import { I18nProvider, useI18n } from './i18n.tsx'
-import './workbench.css'
+import {
+  claimRuntime,
+  createRuntimeOwner,
+  createUiStore,
+  getFileState,
+  getGitReviewState,
+  getTreeWidth,
+  setFileState,
+  setGitReviewState,
+  setTreeWidth,
+} from './runtime.ts'
+import { pairDiffRows, parseDiff, type DiffInlineRange } from './diff.ts'
+import { getThemeColorScheme, subscribeTheme } from './theme.ts'
+import { buildDirTree, buildGitTree, type FsTreeEntry, type GitTreeEntry } from './tree.ts'
+import installWorkbenchStyle from './workbench.css'
 
-export const inject = ['slots', 'sessions']
+export const inject = CLIENT_INJECT
 
-const DEFAULT_WIDTH = 720
 const MIN_WIDTH = 320
 const MAX_WIDTH = 1400
 const TREE_MIN = 120
@@ -79,6 +93,13 @@ function fileName(path: string): string {
   return path.split(/[\\/]/).filter(Boolean).pop() ?? path
 }
 
+function gitStatusLabel(code: string | null): string {
+  const normalized = (code ?? '').replace(/\s/g, '')
+  if (normalized === '??' || normalized === 'U') return 'U'
+  const first = normalized.charAt(0)
+  return ['A', 'C', 'D', 'M', 'R', 'T', 'U'].includes(first) ? first : '?'
+}
+
 function workspaceFilePath(cwd: string | null, path: string): string {
   if (/^(?:[a-z]:[\\/]|\/)/i.test(path) || cwd === null) return path
   const separator = cwd.includes('\\') ? '\\' : '/'
@@ -94,19 +115,39 @@ function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-function highlightedLines(text: string, language: string | null): string[] | null {
+function highlightedLines(text: string, language: string | null, options: { ranges?: DiffInlineRange[]; markerClass?: string } = {}): string[] | null {
   if (language === null) return null
   const grammar = Prism.languages[language]
   if (grammar === undefined) return null
   const lines = ['']
+  let offset = 0
+  const ranges = options.ranges ?? []
+  const markerClass = options.markerClass
   const appendText = (value: string, classes: string[]): void => {
-    const parts = value.split('\n')
-    parts.forEach((part, index) => {
+    const base = offset
+    let localStart = 0
+    const boundaries = new Set<number>([0, value.length])
+    for (const range of ranges) {
+      if (range.end <= base || range.start >= base + value.length) continue
+      boundaries.add(Math.max(0, Math.min(value.length, range.start - base)))
+      boundaries.add(Math.max(0, Math.min(value.length, range.end - base)))
+    }
+    const points = [...boundaries].sort((a, b) => a - b)
+    for (let pointIndex = 1; pointIndex < points.length; pointIndex += 1) {
+      const localEnd = points[pointIndex] ?? value.length
+      const part = value.slice(localStart, localEnd)
+      const covered = ranges.some((range) => base + localStart < range.end && base + localEnd > range.start)
+      const appendHtml = (html: string): void => {
+        const linesForPart = html.split('\n')
+        lines[lines.length - 1] = (lines[lines.length - 1] ?? '') + (linesForPart[0] ?? '')
+        for (let index = 1; index < linesForPart.length; index += 1) lines.push(linesForPart[index] ?? '')
+      }
       const escaped = escapeHtml(part)
-      const html = classes.length > 0 && escaped !== '' ? `<span class="${classes.join(' ')}">${escaped}</span>` : escaped
-      lines[lines.length - 1] = (lines[lines.length - 1] ?? '') + html
-      if (index < parts.length - 1) lines.push('')
-    })
+      const tokenHtml = classes.length > 0 && escaped !== '' ? `<span class="${classes.join(' ')}">${escaped}</span>` : escaped
+      appendHtml(covered && markerClass !== undefined ? `<span class="${markerClass}">${tokenHtml}</span>` : tokenHtml)
+      localStart = localEnd
+    }
+    offset += value.length
   }
   const visit = (value: string | Prism.Token | Array<string | Prism.Token>, classes: string[] = []): void => {
     if (typeof value === 'string') { appendText(value, classes); return }
@@ -119,12 +160,25 @@ function highlightedLines(text: string, language: string | null): string[] | nul
   return lines
 }
 
+function DiffCode(props: { text: string; language: string | null; ranges?: DiffInlineRange[]; markerClass?: string }): ReactNode {
+  const highlighted = highlightedLines(props.text, props.language, { ranges: props.ranges, markerClass: props.markerClass })
+  const html = highlighted?.[0]
+  if (html === undefined) return props.text || ' '
+  return <span className="uwb-highlight" dangerouslySetInnerHTML={{ __html: html || ' ' }} />
+}
+
 function FileTypeIcon(props: { name: string; size?: number }): ReactNode {
   const name = fileName(props.name).toLowerCase()
   const extension = name.split('.').pop() ?? ''
   const FileSvg = FILE_ICON_BY_NAME[name] ?? FILE_ICON_BY_EXTENSION[extension] ?? DocumentFileIcon
   const size = props.size ?? 16
   return <FileSvg className="uwb-file-type-icon" width={size} height={size} aria-hidden="true" />
+}
+
+function useWorkbenchColorScheme(ctx: Context): 'light' | 'dark' {
+  const subscribe = useCallback((listener: () => void) => subscribeTheme(ctx, listener), [ctx])
+  const getSnapshot = useCallback(() => getThemeColorScheme(ctx), [ctx])
+  return useSyncExternalStore(subscribe, getSnapshot, () => 'light')
 }
 
 function useLazyLimit(total: number, resetKey: string, batch = 400): { limit: number; sentinel: RefObject<HTMLDivElement> } {
@@ -204,161 +258,6 @@ function ResizeHandle(props: {
   return <div className={props.className} role="separator" tabIndex={0} aria-label={props.label} aria-orientation="vertical" aria-valuemin={props.min} aria-valuemax={props.max} aria-valuenow={Math.round(props.value)} data-dragging={dragging || undefined} onKeyDown={onKeyDown} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={finish} onPointerCancel={finish} />
 }
 
-/** Shared UI state held in the apply closure, subscribed via useSyncExternalStore. */
-interface UiState {
-  open: boolean
-  tab: 'tree' | 'git'
-  width: number
-}
-
-function createUiStore() {
-  let state: UiState = { open: false, tab: 'tree', width: DEFAULT_WIDTH }
-  const listeners = new Set<() => void>()
-  return {
-    getSnapshot: () => state,
-    subscribe: (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn) } },
-    set: (patch: Partial<UiState>) => {
-      state = { ...state, ...patch }
-      for (const fn of listeners) fn()
-    },
-  }
-}
-
-function splitLines(text: string): string[] {
-  const lines = text.split('\n')
-  if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop()
-  return lines
-}
-
-interface FsTreeEntry {
-  name: string
-  dir: boolean
-  path: string
-}
-
-function buildDirTree(files: api.FsEntry[], rootPath: string): FsTreeEntry[] {
-  return files.map((f) => ({
-    name: f.name,
-    dir: f.dir,
-    path: rootPath.replace(/[\\/]+$/, '') + '/' + f.name,
-  }))
-}
-
-interface GitTreeEntry {
-  name: string
-  dir: boolean
-  path: string | null
-  code: string | null
-  children: GitTreeEntry[] | null
-}
-
-function buildGitTree(files: api.GitFileEntry[]): GitTreeEntry[] {
-  const root: GitTreeEntry = { name: '', dir: true, path: null, code: null, children: [] }
-  for (const f of files) {
-    const parts = f.path.split(/[\\/]/).filter((p) => p !== '')
-    let node: GitTreeEntry = root
-    parts.forEach((name, i) => {
-      const isLeaf = i === parts.length - 1
-      const children = node.children!
-      let child = children.find((c) => c.name === name && c.dir === !isLeaf)
-      if (child === undefined) {
-        child = isLeaf
-          ? { name, dir: false, path: f.path, code: f.code, children: null }
-          : { name, dir: true, path: null, code: null, children: [] }
-        children.push(child)
-      }
-      node = child
-    })
-  }
-  return root.children ?? []
-}
-
-interface DiffRow {
-  cls: 'hunk' | 'meta' | 'add' | 'del' | 'ctx'
-  old: string
-  neu: string
-  text: string
-}
-
-interface SplitDiffRow {
-  kind: 'line' | 'wide'
-  oldLine: string
-  newLine: string
-  oldText: string
-  newText: string
-  oldClass: DiffRow['cls']
-  newClass: DiffRow['cls']
-}
-
-function parseDiff(text: string): DiffRow[] {
-  const out: DiffRow[] = []
-  let oldN = 0
-  let newN = 0
-  for (const raw of splitLines(text)) {
-    if (raw.indexOf('@@') === 0) {
-      const m = /@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(raw)
-      if (m) { oldN = parseInt(m[1] ?? '0', 10); newN = parseInt(m[2] ?? '0', 10) }
-      out.push({ cls: 'hunk', old: '', neu: '', text: raw })
-    } else if (
-      raw.indexOf('+++ ') === 0 || raw.indexOf('--- ') === 0 || raw.indexOf('diff ') === 0
-      || raw.indexOf('index ') === 0 || raw.indexOf('new file') === 0 || raw.indexOf('deleted file') === 0
-      || raw.indexOf('similarity') === 0 || raw.indexOf('old mode') === 0 || raw.indexOf('new mode') === 0
-      || raw.indexOf('Binary files') === 0 || raw === ''
-    ) {
-      out.push({ cls: 'meta', old: '', neu: '', text: raw })
-    } else if (raw.charAt(0) === '+') {
-      out.push({ cls: 'add', old: '', neu: String(newN), text: raw.slice(1) })
-      newN += 1
-    } else if (raw.charAt(0) === '-') {
-      out.push({ cls: 'del', old: String(oldN), neu: '', text: raw.slice(1) })
-      oldN += 1
-    } else {
-      out.push({ cls: 'ctx', old: String(oldN), neu: String(newN), text: raw.slice(1) })
-      oldN += 1
-      newN += 1
-    }
-  }
-  return out
-}
-
-function pairDiffRows(rows: DiffRow[]): SplitDiffRow[] {
-  const paired: SplitDiffRow[] = []
-  for (let index = 0; index < rows.length;) {
-    const row = rows[index]
-    if (row === undefined) break
-    if (row.cls === 'hunk' || row.cls === 'meta') {
-      paired.push({ kind: 'wide', oldLine: '', newLine: '', oldText: row.text, newText: '', oldClass: row.cls, newClass: row.cls })
-      index += 1
-      continue
-    }
-    if (row.cls === 'ctx') {
-      paired.push({ kind: 'line', oldLine: row.old, newLine: row.neu, oldText: row.text, newText: row.text, oldClass: 'ctx', newClass: 'ctx' })
-      index += 1
-      continue
-    }
-
-    const deleted: DiffRow[] = []
-    const added: DiffRow[] = []
-    while (rows[index]?.cls === 'del') { deleted.push(rows[index]!); index += 1 }
-    while (rows[index]?.cls === 'add') { added.push(rows[index]!); index += 1 }
-    const count = Math.max(deleted.length, added.length)
-    for (let offset = 0; offset < count; offset += 1) {
-      const del = deleted[offset]
-      const add = added[offset]
-      paired.push({
-        kind: 'line',
-        oldLine: del?.old ?? '',
-        newLine: add?.neu ?? '',
-        oldText: del?.text ?? '',
-        newText: add?.text ?? '',
-        oldClass: del === undefined ? 'meta' : 'del',
-        newClass: add === undefined ? 'meta' : 'add',
-      })
-    }
-  }
-  return paired
-}
-
 function FsTreeNode(props: {
   entry: FsTreeEntry
   onOpen: (entry: FsTreeEntry) => void
@@ -397,8 +296,8 @@ function FsTreeNode(props: {
       {expanded ? (
         <div className="uwb-children">
           {loading ? <div className="uwb-empty">{t('loading')}</div>
-            : (children ?? []).map((c, i) => (
-              <FsTreeNode key={i} entry={c} onOpen={props.onOpen} selectedPath={props.selectedPath} sessionId={props.sessionId} cwd={props.cwd} />
+            : (children ?? []).map((c) => (
+              <FsTreeNode key={c.path} entry={c} onOpen={props.onOpen} selectedPath={props.selectedPath} sessionId={props.sessionId} cwd={props.cwd} />
             ))}
         </div>
       ) : null}
@@ -429,8 +328,8 @@ function FileTree(props: { sessionId: string; cwd: string | null; onOpen: (entry
   return (
     <div className="uwb-tree-content">
       {err ? <div className="uwb-empty uwb-err">{err}</div>
-        : rootEntries.map((c, i) => (
-          <FsTreeNode key={i} entry={c} onOpen={props.onOpen} selectedPath={props.selectedPath} sessionId={props.sessionId} cwd={props.cwd} />
+        : rootEntries.map((c) => (
+          <FsTreeNode key={c.path} entry={c} onOpen={props.onOpen} selectedPath={props.selectedPath} sessionId={props.sessionId} cwd={props.cwd} />
         ))}
     </div>
   )
@@ -501,6 +400,12 @@ function WorkspaceSearch(props: {
       ) : null}
     </div>
   )
+}
+
+function splitLines(text: string): string[] {
+  const lines = text.split('\n')
+  if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop()
+  return lines
 }
 
 function FileViewer(props: { sessionId: string; cwd: string | null; file: FsTreeEntry | null }): ReactNode {
@@ -597,8 +502,8 @@ function GitTreeNodeView(props: { node: GitTreeEntry; onOpen: (node: GitTreeEntr
   const [expanded, setExpanded] = useState(false)
   const isLeaf = props.node.dir === false
   const sel = props.selectedPath === props.node.path
-  const first = String(props.node.code ?? '').charAt(0).trim()
-  const codeClass = first === 'A' ? 'A' : first === 'D' ? 'D' : (first === 'M' || first === 'R') ? 'M' : 'U'
+  const status = gitStatusLabel(props.node.code)
+  const codeClass = status === 'A' ? 'A' : status === 'D' ? 'D' : (status === 'C' || status === 'M' || status === 'R' || status === 'T') ? 'M' : 'U'
   return (
     <div>
       <div
@@ -607,13 +512,13 @@ function GitTreeNodeView(props: { node: GitTreeEntry; onOpen: (node: GitTreeEntr
       >
         <span className={'uwb-chevron' + (expanded ? ' expanded' : '')}>{isLeaf ? null : <Icon name="chevron" size={13} />}</span>
         {isLeaf ? <FileTypeIcon name={props.node.name} size={16} /> : <FolderFileIcon className="uwb-file-icon" width={16} height={16} aria-hidden="true" />}
-        {isLeaf ? <span className={'uwb-code ' + codeClass}>{String(props.node.code ?? '?').replace(/\s/g, '') || '?'}</span> : null}
+        {isLeaf ? <span className={'uwb-code ' + codeClass}>{status}</span> : null}
         <span className="uwb-row-label">{props.node.name}</span>
       </div>
       {!isLeaf && expanded ? (
         <div className="uwb-children">
-          {(props.node.children ?? []).map((c, i) => (
-            <GitTreeNodeView key={i} node={c} onOpen={props.onOpen} selectedPath={props.selectedPath} />
+          {(props.node.children ?? []).map((c) => (
+            <GitTreeNodeView key={c.path ?? c.name} node={c} onOpen={props.onOpen} selectedPath={props.selectedPath} />
           ))}
         </div>
       ) : null}
@@ -623,21 +528,23 @@ function GitTreeNodeView(props: { node: GitTreeEntry; onOpen: (node: GitTreeEntr
 
 function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode {
   const { t } = useI18n()
+  const reviewKey = `${props.sessionId}:${props.cwd ?? ''}`
+  const persisted = getGitReviewState(reviewKey)
   const [branchList, setBranchList] = useState<string[]>([])
   const [currentBranch, setCurrentBranch] = useState('')
-  const [viewMode, setViewMode] = useState<'work' | 'last'>('work')
-  const [ref, setRef] = useState('')
+  const [viewMode, setViewMode] = useState<'work' | 'last'>(() => persisted?.viewMode ?? 'work')
+  const [ref, setRef] = useState(() => persisted?.ref ?? '')
   const [workFiles, setWorkFiles] = useState<api.GitFileEntry[]>([])
   const [lastFiles, setLastFiles] = useState<api.GitFileEntry[]>([])
-  const [sel, setSel] = useState<{ path: string; source: 'work' | 'last' } | null>(null)
+  const [sel, setSel] = useState<{ path: string; source: 'work' | 'last' } | null>(() => persisted?.sel ?? null)
   const [diffText, setDiffText] = useState('')
-  const [diffLayout, setDiffLayout] = useState<'split' | 'unified'>('unified')
-  const [contextMode, setContextMode] = useState<'all' | 'changes'>('changes')
+  const [diffLayout, setDiffLayout] = useState<'split' | 'unified'>(() => persisted?.diffLayout ?? 'unified')
+  const [contextMode, setContextMode] = useState<'all' | 'changes'>(() => persisted?.contextMode ?? 'changes')
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
   const [diffErr, setDiffErr] = useState('')
-  const [filter, setFilter] = useState('')
-  const [sidebarWidth, setSidebarWidth] = useState(238)
+  const [filter, setFilter] = useState(() => persisted?.filter ?? '')
+  const [sidebarWidth, setSidebarWidth] = useState(() => persisted?.sidebarWidth ?? 238)
   const [repository, setRepository] = useState<boolean | null>(null)
   const [creatingRepository, setCreatingRepository] = useState(false)
   const [reviewRevision, setReviewRevision] = useState(0)
@@ -645,6 +552,18 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
   const diffRequest = useRef(0)
   const refreshInFlight = useRef(false)
   const selectionRef = useRef<typeof sel>(null)
+
+  useEffect(() => {
+    setGitReviewState(reviewKey, {
+      viewMode,
+      ref,
+      diffLayout,
+      contextMode,
+      filter,
+      sidebarWidth,
+      sel,
+    })
+  }, [contextMode, diffLayout, filter, ref, reviewKey, sel, sidebarWidth, viewMode])
 
   useEffect(() => { setErr(''); setDiffErr('') }, [t])
   useEffect(() => { selectionRef.current = sel }, [sel])
@@ -709,11 +628,9 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
 
   useEffect(() => {
     const update = (): void => { if (document.visibilityState === 'visible') void refresh() }
-    const timer = window.setInterval(update, 2_000)
     window.addEventListener('focus', update)
     document.addEventListener('visibilitychange', update)
     return () => {
-      window.clearInterval(timer)
       window.removeEventListener('focus', update)
       document.removeEventListener('visibilitychange', update)
     }
@@ -769,6 +686,7 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
   const tree = useMemo(() => buildGitTree(shownFiles), [shownFiles])
   const diffRows = useMemo(() => parseDiff(diffText), [diffText])
   const splitRows = useMemo(() => pairDiffRows(diffRows), [diffRows])
+  const diffLanguage = useMemo(() => prismLanguage(sel?.path ?? ''), [sel?.path])
   const additions = diffRows.filter((row) => row.cls === 'add').length
   const deletions = diffRows.filter((row) => row.cls === 'del').length
   const effRef = ref || currentBranch || 'HEAD'
@@ -819,7 +737,7 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
         <div className="uwb-change-tree">
           {err ? <div className="uwb-empty uwb-err">{err}</div> : null}
           {shownFiles.length === 0 ? <EmptyState icon="git" title={t('noChanges')} detail={viewMode === 'work' ? t('cleanWorkspace') : t('noCommitChanges')} />
-            : tree.map((n, i) => <GitTreeNodeView key={i} node={n} onOpen={(nd) => openFile(nd, viewMode)} selectedPath={sel?.path ?? null} />)}
+            : tree.map((n) => <GitTreeNodeView key={n.path ?? n.name} node={n} onOpen={(nd) => openFile(nd, viewMode)} selectedPath={sel?.path ?? null} />)}
         </div>
       </div>
       <ResizeHandle className="uwb-tree-resize" label={t('resizeReviewList')} value={sidebarWidth} direction={1} min={190} max={420} onChange={setSidebarWidth} />
@@ -858,21 +776,23 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
               {loading ? <div className="uwb-loading"><span />{t('readingDiff')}</div>
                 : diffRows.length === 0 ? <EmptyState icon="git" title={t('noDiff')} detail={t('noDiffDetail')} />
                   : diffLayout === 'unified' ? (
-                    <div className={'uwb-code-view uwb-diff-view' + (contextMode === 'all' ? ' uwb-wrap' : '')}>{diffRows.slice(0, lazy.limit).map((r, i) => (
+                    <div className={'uwb-code-view uwb-diff-view' + (contextMode === 'all' ? ' uwb-wrap' : '')}>{diffRows.slice(0, lazy.limit).map((r, i) => r.cls === 'gap' ? (
+                      <div className="uwb-line uwb-diff-gap" key={i}><span className="uwb-diff-gap-label">{t('unmodifiedLines', { count: r.count ?? 0 })}</span></div>
+                    ) : (
                       <div className={'uwb-line uwb-diff-' + r.cls} key={i}>
                         <span className="uwb-ln">{r.old}</span>
                         <span className="uwb-ln">{r.neu}</span>
-                        <span className="uwb-lc">{r.text || ' '}</span>
+                        <span className="uwb-lc"><DiffCode text={r.text} language={diffLanguage} ranges={r.inline} markerClass={r.cls === 'add' ? 'uwb-diff-inline-add' : r.cls === 'del' ? 'uwb-diff-inline-del' : undefined} /></span>
                       </div>
                     ))}
                     {lazy.limit < diffRows.length ? <div ref={lazy.sentinel} className="uwb-lazy-status">{t('shownLines', { shown: lazy.limit, total: diffRows.length })}</div> : null}</div>
                   ) : (
                     <div className={'uwb-split-view' + (contextMode === 'all' ? ' uwb-wrap' : '')}>{splitRows.slice(0, lazy.limit).map((row, index) => row.kind === 'wide' ? (
-                      <div className={'uwb-split-wide uwb-diff-' + row.oldClass} key={index}>{row.oldText || ' '}</div>
+                      <div className={'uwb-split-wide uwb-diff-' + row.oldClass} key={index}>{row.gapCount !== undefined ? t('unmodifiedLines', { count: row.gapCount }) : row.oldText || ' '}</div>
                     ) : (
                       <div className="uwb-split-row" key={index}>
-                        <div className={'uwb-split-side uwb-diff-' + row.oldClass + (row.oldLine === '' ? ' uwb-diff-empty' : '')}><span className="uwb-ln">{row.oldLine}</span><span className="uwb-lc">{row.oldText || ' '}</span></div>
-                        <div className={'uwb-split-side uwb-diff-' + row.newClass + (row.newLine === '' ? ' uwb-diff-empty' : '')}><span className="uwb-ln">{row.newLine}</span><span className="uwb-lc">{row.newText || ' '}</span></div>
+                        <div className={'uwb-split-side uwb-diff-' + row.oldClass + (row.oldLine === '' ? ' uwb-diff-empty' : '')}><span className="uwb-ln">{row.oldLine}</span><span className="uwb-lc"><DiffCode text={row.oldText} language={diffLanguage} ranges={row.oldInline} markerClass={row.oldClass === 'del' ? 'uwb-diff-inline-del' : undefined} /></span></div>
+                        <div className={'uwb-split-side uwb-diff-' + row.newClass + (row.newLine === '' ? ' uwb-diff-empty' : '')}><span className="uwb-ln">{row.newLine}</span><span className="uwb-lc"><DiffCode text={row.newText} language={diffLanguage} ranges={row.newInline} markerClass={row.newClass === 'add' ? 'uwb-diff-inline-add' : undefined} /></span></div>
                       </div>
                     ))}
                     {lazy.limit < splitRows.length ? <div ref={lazy.sentinel} className="uwb-lazy-status">{t('shownLines', { shown: lazy.limit, total: splitRows.length })}</div> : null}</div>
@@ -887,9 +807,11 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
 function Workbench(props: { ctx: Context; ui: ReturnType<typeof createUiStore> }): ReactNode {
   const { t } = useI18n()
   const ui = useSyncExternalStore(props.ui.subscribe, props.ui.getSnapshot)
+  const colorScheme = useWorkbenchColorScheme(props.ctx)
   const [sessionList, setSessionList] = useState<{ current?: string; byId: Record<string, { cwd?: string }> }>({ byId: {} })
   const [file, setFile] = useState<FsTreeEntry | null>(null)
   const [treeW, setTreeW] = useState(220)
+  const previousSession = useRef<string | undefined>(undefined)
 
   useEffect(() => {
     const sessions = props.ctx.sessions
@@ -972,12 +894,23 @@ function Workbench(props: { ctx: Context; ui: ReturnType<typeof createUiStore> }
   const sid = sessionId ?? ''
 
   useEffect(() => {
-    setFile(null)
-    props.ui.set({ open: false })
+    const changed = previousSession.current !== undefined && previousSession.current !== sessionId
+    previousSession.current = sessionId
+    if (changed) props.ui.set({ open: false })
+    setFile(sessionId === undefined ? null : getFileState(sessionId))
+    setTreeW(sessionId === undefined ? 220 : getTreeWidth(sessionId))
   }, [sessionId, props.ui])
 
+  useEffect(() => {
+    if (sessionId !== undefined) setFileState(sessionId, file)
+  }, [file, sessionId])
+
+  useEffect(() => {
+    if (sessionId !== undefined) setTreeWidth(sessionId, treeW)
+  }, [sessionId, treeW])
+
   return (
-    <div className={'uwb-root' + (ui.open ? '' : ' uwb-closed')} style={{ width: ui.width }}>
+    <div className={'uwb-root' + (ui.open ? '' : ' uwb-closed')} data-uwb-color-scheme={colorScheme} style={{ width: ui.width }}>
       <ResizeHandle className="uwb-resize" label={t('resizeWorkbench')} value={ui.width} direction={-1} min={MIN_WIDTH} max={Math.min(MAX_WIDTH, window.innerWidth)} onChange={(width) => props.ui.set({ width })} />
       <div className="uwb-head">
         <div className="uwb-tabs" role="tablist" aria-label={t('workbenchViews')}>
@@ -1019,25 +952,41 @@ function WorkbenchToggle(props: { ui: ReturnType<typeof createUiStore> }): React
 
 export function apply(ctx: Context): void {
   const ui = createUiStore()
-  let rootDiv: HTMLDivElement | undefined
-  let root: Root | undefined
+  const owner = createRuntimeOwner()
+  owner.rebind(ctx)
+  claimRuntime(owner)
 
   ctx.effect(() => {
+    let rootDiv: HTMLDivElement | undefined
+    let root: Root | undefined
+    let styleDisposer: () => void = () => undefined
+    let slotDisposer: (() => void) | undefined
+
+    const cleanup = (): void => {
+      slotDisposer?.()
+      slotDisposer = undefined
+      root?.unmount()
+      root = undefined
+      rootDiv?.remove()
+      rootDiv = undefined
+      styleDisposer()
+      styleDisposer = () => undefined
+      document.documentElement.style.setProperty('--uwb-width', '0px')
+      document.documentElement.style.removeProperty('--uwb-top')
+    }
+    owner.setCleanup(cleanup)
+    if (owner.disposed) return
+
+    styleDisposer = installWorkbenchStyle()
     rootDiv = document.createElement('div')
     rootDiv.setAttribute('data-uwb-root', '')
     document.body.appendChild(rootDiv)
     root = createRoot(rootDiv)
     root.render(<I18nProvider><Workbench ctx={ctx} ui={ui} /></I18nProvider>)
-    return () => {
-      root?.unmount()
-      rootDiv?.remove()
-      document.documentElement.style.setProperty('--uwb-width', '0px')
-      document.documentElement.style.removeProperty('--uwb-top')
-    }
+    slotDisposer = ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register(
+      { name: 'conversation.session.header.utilities', id: 'ui-workbench', order: 1000 },
+      () => <I18nProvider><WorkbenchToggle ui={ui} /></I18nProvider>,
+    ))
+    return () => owner.dispose()
   }, 'dsh-ui-workbench: mount')
-
-  ctx.effect(() => ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register(
-    { name: 'conversation.session.header.utilities', id: 'ui-workbench', order: 1000 },
-    () => <I18nProvider><WorkbenchToggle ui={ui} /></I18nProvider>,
-  )), 'dsh-ui-workbench: header action')
 }

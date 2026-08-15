@@ -5,6 +5,7 @@
  * locale or color config.
  */
 import { spawn } from 'node:child_process'
+import { StringDecoder } from 'node:string_decoder'
 
 class GitCommandError extends Error {
   readonly exitCode: number | null
@@ -15,26 +16,36 @@ class GitCommandError extends Error {
   }
 }
 
+/** Decode child-process output without splitting a multi-byte UTF-8 character. */
+export function decodeGitChunks(chunks: readonly Buffer[]): string {
+  const decoder = new StringDecoder('utf8')
+  return chunks.map((chunk) => decoder.write(chunk)).join('') + decoder.end()
+}
+
 function runGit(cwd: string, args: string[], timeoutMs = 30_000, acceptedCodes: readonly number[] = [0]): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const child = spawn('git', ['-C', cwd, '--no-pager', '-c', 'color.ui=false', ...args], {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C' },
     })
+    const stdoutDecoder = new StringDecoder('utf8')
+    const stderrDecoder = new StringDecoder('utf8')
     let stdout = ''
     let stderr = ''
     const timer = setTimeout(() => {
       child.kill('SIGKILL')
       reject(new Error(`git ${args[0] ?? ''} timed out`))
     }, timeoutMs)
-    child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString('utf8') })
-    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8') })
+    child.stdout.on('data', (chunk: Buffer) => { stdout += stdoutDecoder.write(chunk) })
+    child.stderr.on('data', (chunk: Buffer) => { stderr += stderrDecoder.write(chunk) })
     child.on('error', (error) => {
       clearTimeout(timer)
       reject(new Error(`cannot run git: ${error.message}`))
     })
     child.on('close', (code) => {
       clearTimeout(timer)
+      stdout += stdoutDecoder.end()
+      stderr += stderrDecoder.end()
       if (code !== null && acceptedCodes.includes(code)) resolve(stdout)
       else reject(new GitCommandError(stderr.trim() || `git exited with ${String(code)}`, code))
     })
@@ -56,6 +67,18 @@ export interface GitFileEntry {
   path: string
 }
 
+function displayStatusCode(code: string): string {
+  const normalized = code.length === 2 ? code : code.trim()
+  if (normalized === '??') return 'U'
+  const indexStatus = normalized.charAt(0)
+  const worktreeStatus = normalized.charAt(1)
+  const status = indexStatus !== '' && indexStatus !== ' ' ? indexStatus : worktreeStatus
+  if (status === '?') return 'U'
+  return status === 'A' || status === 'C' || status === 'D' || status === 'M' || status === 'R' || status === 'T' || status === 'U'
+    ? status
+    : '?'
+}
+
 export async function branch(cwd: string): Promise<string> {
   try {
     const out = await runGit(cwd, ['branch', '--show-current'])
@@ -74,10 +97,14 @@ export async function branches(cwd: string): Promise<string[]> {
   }
 }
 
-/** Working-tree changed files (index + worktree, untracked included). */
+/** Working-tree changed files (index + worktree, every untracked file included). */
 export async function statusFiles(cwd: string): Promise<GitFileEntry[]> {
   if (!(await isRepository(cwd))) return []
-  const out = await runGit(cwd, ['status', '--porcelain=v1', '--untracked-files=normal'])
+  // `normal` collapses an untracked directory to `?? directory/`, which
+  // prevents the client tree from reconstructing the changed files below it.
+  // Ask Git for every untracked file so the same path hierarchy is available
+  // to the review tree as to the workspace file tree.
+  const out = await runGit(cwd, ['status', '--porcelain=v1', '--untracked-files=all'])
   const files: GitFileEntry[] = []
   for (const line of out.split('\n')) {
     if (line === '') continue
@@ -88,7 +115,7 @@ export async function statusFiles(cwd: string): Promise<GitFileEntry[]> {
       if (arrow !== -1) path = path.slice(arrow + 4)
     }
     path = path.trim()
-    if (path !== '') files.push({ code: code.trim() || '?', path })
+    if (path !== '') files.push({ code: displayStatusCode(code), path })
   }
   return files
 }

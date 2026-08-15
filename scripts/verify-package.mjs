@@ -20,12 +20,19 @@ const expectedFiles = new Set([
   'cordis.patch.yml',
   'lib/client.js',
   'lib/index.js',
+  'lib/invariant.js',
   'lib/types/client/api.d.ts',
+  'lib/types/client/diff.d.ts',
   'lib/types/client/i18n.d.ts',
   'lib/types/client/index.d.ts',
+  'lib/types/client/runtime.d.ts',
+  'lib/types/client/theme.d.ts',
   'lib/types/context-types.d.ts',
   'lib/types/fs.d.ts',
   'lib/types/git.d.ts',
+  'lib/types/invariant.d.ts',
+  'lib/types/client/tree.d.ts',
+  'lib/types/config.d.ts',
   'lib/types/index.d.ts',
   'lib/types/wire.d.ts',
   'package.json',
@@ -33,7 +40,12 @@ const expectedFiles = new Set([
 const packedCommand = process.platform === 'win32'
   ? [process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', 'npm pack --json --dry-run --ignore-scripts']]
   : ['npm', ['pack', '--json', '--dry-run', '--ignore-scripts']]
-const packed = JSON.parse(execFileSync(packedCommand[0], packedCommand[1], { encoding: 'utf8' }))
+const packedOutput = execFileSync(packedCommand[0], packedCommand[1], { encoding: 'utf8' })
+// npm runs `prepare` during `npm pack`; tsdown writes progress logs before the
+// JSON payload, so parse the final JSON array rather than assuming stdout is
+// JSON-only.
+const jsonStart = packedOutput.lastIndexOf('\n[')
+const packed = JSON.parse((jsonStart === -1 ? packedOutput : packedOutput.slice(jsonStart + 1)).trim())
 const packedFiles = new Set(packed[0]?.files?.map((file) => file.path) ?? [])
 const unexpected = [...packedFiles].filter((path) => !expectedFiles.has(path))
 const missing = [...expectedFiles].filter((path) => !packedFiles.has(path))

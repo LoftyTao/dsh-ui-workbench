@@ -26,6 +26,10 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
     "./client": {
       "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
@@ -33,7 +37,7 @@
     "./package.json": "./package.json"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.19"
   },
   "packageManager": "pnpm@11.21.0",
   "dsh": {
@@ -50,6 +54,7 @@
   },
   "files": [
     "lib/index.js",
+    "lib/invariant.js",
     "lib/client.js",
     "lib/types/**/*.d.ts",
     "bin/dsh-ui-workbench.mjs",
@@ -60,7 +65,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json && tsdown",
     "typecheck": "tsc --noEmit",
-    "check": "pnpm typecheck && pnpm build && pnpm verify:package",
+    "test": "pnpm build && node --test tests/*.test.mjs",
+    "check": "pnpm typecheck && pnpm test && pnpm verify:package",
     "pack:check": "npm pack --dry-run --ignore-scripts",
     "verify:package": "node scripts/verify-package.mjs",
     "prepare": "tsdown",
@@ -110,6 +116,7 @@
     "typescript": "^5.6.0"
   },
   "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.1",
     "@react-symbols/icons": "^1.4.1",
     "prismjs": "^1.30.0"
   }
