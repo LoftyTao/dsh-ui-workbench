@@ -9,19 +9,6 @@ import { memo, useCallback, useEffect, useMemo, useRef, useSyncExternalStore, us
 import { createRoot, type Root } from 'react-dom/client'
 import { BracketsYellow as JsonFileIcon, CodeBlue as CssFileIcon, Docker as DockerFileIcon, Document as DocumentFileIcon, Go as GoFileIcon, Ignore as IgnoreFileIcon, Image as ImageFileIcon, Java as JavaFileIcon, Js as JavaScriptFileIcon, Markdown as MarkdownFileIcon, NPM as NpmFileIcon, PNPM as PnpmFileIcon, Python as PythonFileIcon, Reactjs as ReactJavaScriptFileIcon, Reactts as ReactTypeScriptFileIcon, Rust as RustFileIcon, Sass as SassFileIcon, Shell as ShellFileIcon, SVG as SvgFileIcon, Svelte as SvelteFileIcon, Text as TextFileIcon, Tsconfig as TsconfigFileIcon, TypeScript as TypeScriptFileIcon, Vue as VueFileIcon, XML as XmlFileIcon, Yaml as YamlFileIcon } from '@react-symbols/icons/files'
 import { Folder as FolderFileIcon } from '@react-symbols/icons/folders'
-import Prism from 'prismjs'
-import 'prismjs/components/prism-typescript'
-import 'prismjs/components/prism-jsx'
-import 'prismjs/components/prism-tsx'
-import 'prismjs/components/prism-json'
-import 'prismjs/components/prism-css'
-import 'prismjs/components/prism-scss'
-import 'prismjs/components/prism-python'
-import 'prismjs/components/prism-bash'
-import 'prismjs/components/prism-powershell'
-import 'prismjs/components/prism-markdown'
-import 'prismjs/components/prism-yaml'
-import 'prismjs/components/prism-sql'
 import type { Context } from '../context-types.ts'
 import { CLIENT_INJECT } from '../invariant.ts'
 import * as api from './api.ts'
@@ -38,6 +25,7 @@ import {
   setTreeWidth,
 } from './runtime.ts'
 import { pairDiffRows, parseDiff, type DiffInlineRange } from './diff.ts'
+import { ensureSyntaxHighlighter, getSyntaxHighlighter, getSyntaxRevision, subscribeSyntax, type SyntaxLanguage } from './highlight.ts'
 import { getThemeColorScheme, subscribeTheme } from './theme.ts'
 import { buildDirTree, buildGitTree, type FsTreeEntry, type GitTreeEntry } from './tree.ts'
 import installWorkbenchStyle from './workbench.css'
@@ -48,10 +36,11 @@ const MIN_WIDTH = 320
 const MAX_WIDTH = 1400
 const TREE_MIN = 120
 const TREE_MAX = 480
-const PRISM_LANGUAGE_BY_EXTENSION: Record<string, string> = {
+const SHIKI_LANGUAGE_BY_EXTENSION: Record<string, SyntaxLanguage> = {
   ts: 'typescript', tsx: 'tsx', js: 'javascript', jsx: 'jsx', json: 'json', css: 'css', scss: 'scss',
-  html: 'markup', htm: 'markup', xml: 'markup', svg: 'markup', md: 'markdown', py: 'python', sh: 'bash',
-  bash: 'bash', ps1: 'powershell', yml: 'yaml', yaml: 'yaml', sql: 'sql',
+  sass: 'sass', html: 'html', htm: 'html', xml: 'xml', svg: 'xml', md: 'markdown', mdx: 'mdx', py: 'python',
+  sh: 'bash', bash: 'bash', zsh: 'bash', ps1: 'powershell', yml: 'yaml', yaml: 'yaml', sql: 'sql', typ: 'typst',
+  rs: 'rust', go: 'go', java: 'java', vue: 'vue', svelte: 'svelte',
 }
 const FILE_ICON_BY_NAME: Record<string, typeof TextFileIcon> = {
   'package.json': NpmFileIcon, 'package-lock.json': NpmFileIcon, 'pnpm-lock.yaml': PnpmFileIcon,
@@ -112,61 +101,63 @@ function workspaceFilePath(cwd: string | null, path: string): string {
   return `${cwd.replace(/[\\/]$/, '')}${separator}${path.replace(/[\\/]/g, separator).replace(/^[\\/]/, '')}`
 }
 
-function prismLanguage(path: string): string | null {
+function syntaxLanguage(path: string): SyntaxLanguage | null {
+  const name = fileName(path).toLowerCase()
+  if (name === 'dockerfile') return 'dockerfile'
+  if (name === 'makefile') return 'makefile'
   const ext = path.split('.').pop()?.toLowerCase() ?? ''
-  return PRISM_LANGUAGE_BY_EXTENSION[ext] ?? null
+  return SHIKI_LANGUAGE_BY_EXTENSION[ext] ?? (ext === '' ? null : ext as SyntaxLanguage)
 }
 
 function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-function highlightedLines(text: string, language: string | null, options: { ranges?: DiffInlineRange[]; markerClass?: string } = {}): string[] | null {
+function highlightedLines(text: string, language: SyntaxLanguage | null, options: { ranges?: DiffInlineRange[]; markerClass?: string } = {}): string[] | null {
   if (language === null) return null
-  const grammar = Prism.languages[language]
-  if (grammar === undefined) return null
-  const lines = ['']
-  let offset = 0
+  const highlighter = getSyntaxHighlighter()
+  if (highlighter === null || !highlighter.getLoadedLanguages().includes(language)) return null
   const ranges = options.ranges ?? []
   const markerClass = options.markerClass
-  const appendText = (value: string, classes: string[]): void => {
-    const base = offset
-    let localStart = 0
-    const boundaries = new Set<number>([0, value.length])
-    for (const range of ranges) {
-      if (range.end <= base || range.start >= base + value.length) continue
-      boundaries.add(Math.max(0, Math.min(value.length, range.start - base)))
-      boundaries.add(Math.max(0, Math.min(value.length, range.end - base)))
-    }
-    const points = [...boundaries].sort((a, b) => a - b)
-    for (let pointIndex = 1; pointIndex < points.length; pointIndex += 1) {
-      const localEnd = points[pointIndex] ?? value.length
-      const part = value.slice(localStart, localEnd)
-      const covered = ranges.some((range) => base + localStart < range.end && base + localEnd > range.start)
-      const appendHtml = (html: string): void => {
-        const linesForPart = html.split('\n')
-        lines[lines.length - 1] = (lines[lines.length - 1] ?? '') + (linesForPart[0] ?? '')
-        for (let index = 1; index < linesForPart.length; index += 1) lines.push(linesForPart[index] ?? '')
+  return highlighter.codeToTokensWithThemes(text, {
+    lang: language,
+    themes: { light: 'github-light', dark: 'github-dark' },
+  }).map((tokens) => {
+    let line = ''
+    for (const token of tokens) {
+      const base = token.offset
+      const value = token.content
+      const styles = Object.entries(token.variants).map(([theme, style]) => `--shiki-${theme}:${style.color}`).join(';')
+      const fontStyle = token.variants.light?.fontStyle ?? 0
+      const classes = ['shiki-token', fontStyle & 1 ? 'shiki-italic' : '', fontStyle & 2 ? 'shiki-bold' : '', fontStyle & 4 ? 'shiki-underline' : ''].filter(Boolean).join(' ')
+      let localStart = 0
+      const boundaries = new Set<number>([0, value.length])
+      for (const range of ranges) {
+        if (range.end <= base || range.start >= base + value.length) continue
+        boundaries.add(Math.max(0, Math.min(value.length, range.start - base)))
+        boundaries.add(Math.max(0, Math.min(value.length, range.end - base)))
       }
-      const escaped = escapeHtml(part)
-      const tokenHtml = classes.length > 0 && escaped !== '' ? `<span class="${classes.join(' ')}">${escaped}</span>` : escaped
-      appendHtml(covered && markerClass !== undefined ? `<span class="${markerClass}">${tokenHtml}</span>` : tokenHtml)
-      localStart = localEnd
+      const points = [...boundaries].sort((a, b) => a - b)
+      for (let pointIndex = 1; pointIndex < points.length; pointIndex += 1) {
+        const localEnd = points[pointIndex] ?? value.length
+        const part = value.slice(localStart, localEnd)
+        const covered = ranges.some((range) => base + localStart < range.end && base + localEnd > range.start)
+        const escaped = escapeHtml(part)
+        const tokenHtml = escaped === '' ? '' : `<span class="${classes}" style="${styles}">${escaped}</span>`
+        line += covered && markerClass !== undefined ? `<span class="${markerClass}">${tokenHtml}</span>` : tokenHtml
+        localStart = localEnd
+      }
     }
-    offset += value.length
-  }
-  const visit = (value: string | Prism.Token | Array<string | Prism.Token>, classes: string[] = []): void => {
-    if (typeof value === 'string') { appendText(value, classes); return }
-    if (Array.isArray(value)) { value.forEach((child) => visit(child, classes)); return }
-    const alias = Array.isArray(value.alias) ? value.alias : value.alias === undefined ? [] : [value.alias]
-    visit(value.content, [...classes, 'token', value.type, ...alias])
-  }
-  visit(Prism.tokenize(text, grammar))
-  if (lines.length > 0 && lines[lines.length - 1] === '' && text.endsWith('\n')) lines.pop()
-  return lines
+    return line
+  })
 }
 
-function DiffCode(props: { text: string; language: string | null; ranges?: DiffInlineRange[]; markerClass?: string }): ReactNode {
+function useSyntaxRevision(): number {
+  useEffect(() => { void ensureSyntaxHighlighter() }, [])
+  return useSyncExternalStore(subscribeSyntax, getSyntaxRevision, getSyntaxRevision)
+}
+
+function DiffCode(props: { text: string; language: SyntaxLanguage | null; ranges?: DiffInlineRange[]; markerClass?: string }): ReactNode {
   const highlighted = highlightedLines(props.text, props.language, { ranges: props.ranges, markerClass: props.markerClass })
   const html = highlighted?.[0]
   if (html === undefined) return props.text || ' '
@@ -621,8 +612,9 @@ function SourceFileViewer(props: { sessionId: string; cwd: string | null; file: 
   const [loadingMore, setLoadingMore] = useState(false)
   const moreSentinel = useRef<HTMLDivElement>(null)
   const lines = useMemo(() => splitLines(content?.text ?? ''), [content])
-  const language = useMemo(() => prismLanguage(content?.path ?? ''), [content?.path])
-  const highlighted = useMemo(() => highlightedLines(content?.text ?? '', language), [content?.text, language])
+  const syntaxRevision = useSyntaxRevision()
+  const language = useMemo(() => syntaxLanguage(content?.path ?? ''), [content?.path])
+  const highlighted = useMemo(() => highlightedLines(content?.text ?? '', language), [content?.text, language, syntaxRevision])
   const lazy = useLazyLimit(lines.length, content?.path ?? '')
 
   useEffect(() => {
@@ -742,6 +734,7 @@ function GitTreeNodeView(props: { node: GitTreeEntry; onOpen: (node: GitTreeEntr
 
 function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode {
   const { t } = useI18n()
+  useSyntaxRevision()
   const reviewKey = `${props.sessionId}:${props.cwd ?? ''}`
   const persisted = getGitReviewState(reviewKey)
   const [branchList, setBranchList] = useState<string[]>([])
@@ -900,7 +893,7 @@ function GitReview(props: { sessionId: string; cwd: string | null }): ReactNode 
   const tree = useMemo(() => buildGitTree(shownFiles), [shownFiles])
   const diffRows = useMemo(() => parseDiff(diffText), [diffText])
   const splitRows = useMemo(() => pairDiffRows(diffRows), [diffRows])
-  const diffLanguage = useMemo(() => prismLanguage(sel?.path ?? ''), [sel?.path])
+  const diffLanguage = useMemo(() => syntaxLanguage(sel?.path ?? ''), [sel?.path])
   const additions = diffRows.filter((row) => row.cls === 'add').length
   const deletions = diffRows.filter((row) => row.cls === 'del').length
   const effRef = ref || currentBranch || 'HEAD'

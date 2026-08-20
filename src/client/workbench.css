@@ -26,13 +26,6 @@
   --uwb-diff-del-line-bg: var(--uwb-diff-del-bg);
   --uwb-diff-del-inline-bg: color-mix(in srgb, var(--uwb-diff-del-bg) 70%, var(--dsw-alias-state-error-secondary, var(--uwb-diff-del-text)) 30%);
   --uwb-diff-modified-text: var(--dsw-alias-state-warn-label, light-dark(#ff8c00, #ffba92));
-  --uwb-syntax-comment: var(--shiki-token-comment, var(--uwb-faint));
-  --uwb-syntax-punctuation: var(--shiki-token-punctuation, var(--uwb-muted));
-  --uwb-syntax-constant: var(--shiki-token-constant, var(--uwb-accent));
-  --uwb-syntax-string: var(--shiki-token-string, var(--uwb-green));
-  --uwb-syntax-keyword: var(--shiki-token-keyword, var(--uwb-accent));
-  --uwb-syntax-parameter: var(--shiki-token-parameter, var(--uwb-amber));
-  --uwb-syntax-function: var(--shiki-token-function, var(--uwb-accent));
   --uwb-code-font: var(--ds-font-family-code, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace);
 }
 
@@ -364,19 +357,12 @@ body.uwb-is-resizing, body.uwb-is-resizing * { cursor: col-resize !important; us
 .uwb-diff-empty { color: transparent; background: var(--uwb-surface-2); }
 .uwb-lazy-status { min-height: 36px; padding: 9px 16px; color: var(--uwb-faint); background: var(--uwb-surface); border-top: 1px solid var(--uwb-border-soft); font-family: var(--ds-font-family, inherit); font-size: 11px; text-align: center; }
 
-/* Prism tokens intentionally resolve through the Harness palette so syntax
-   remains legible in both themes without introducing an editor surface. */
-.uwb-highlight .token.comment, .uwb-highlight .token.prolog, .uwb-highlight .token.doctype, .uwb-highlight .token.cdata { color: var(--uwb-syntax-comment); font-style: italic; }
-.uwb-highlight .token.punctuation { color: var(--uwb-syntax-punctuation); }
-.uwb-highlight .token.property, .uwb-highlight .token.tag, .uwb-highlight .token.constant, .uwb-highlight .token.symbol, .uwb-highlight .token.deleted { color: var(--uwb-diff-del-text); }
-.uwb-highlight .token.boolean, .uwb-highlight .token.number { color: var(--uwb-syntax-constant); }
-.uwb-highlight .token.selector, .uwb-highlight .token.attr-name, .uwb-highlight .token.string, .uwb-highlight .token.char, .uwb-highlight .token.builtin, .uwb-highlight .token.inserted { color: var(--uwb-syntax-string); }
-.uwb-highlight .token.operator, .uwb-highlight .token.entity, .uwb-highlight .token.url, .uwb-highlight .language-css .token.string, .uwb-highlight .style .token.string { color: var(--uwb-syntax-punctuation); }
-.uwb-highlight .token.atrule, .uwb-highlight .token.attr-value, .uwb-highlight .token.keyword { color: var(--uwb-syntax-keyword); }
-.uwb-highlight .token.function, .uwb-highlight .token.class-name { color: var(--uwb-syntax-function); }
-.uwb-highlight .token.regex, .uwb-highlight .token.important, .uwb-highlight .token.variable { color: var(--uwb-syntax-parameter); }
-.uwb-highlight .token.bold, .uwb-highlight .token.important { font-weight: 650; }
-.uwb-highlight .token.italic { font-style: italic; }
+/* Shiki emits both theme colors per token; DSH's active scheme selects one. */
+.uwb-root[data-uwb-color-scheme="light"] .shiki-token { color: var(--shiki-light); }
+.uwb-root[data-uwb-color-scheme="dark"] .shiki-token { color: var(--shiki-dark); }
+.shiki-token.shiki-bold { font-weight: 650; }
+.shiki-token.shiki-italic { font-style: italic; }
+.shiki-token.shiki-underline { text-decoration: underline; }
 
 .uwb-openbtn {
   display: flex;
