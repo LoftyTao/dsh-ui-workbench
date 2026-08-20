@@ -255,6 +255,10 @@ body.uwb-is-resizing, body.uwb-is-resizing * { cursor: col-resize !important; us
 .uwb-file-ident { display: flex; min-width: 0; align-items: center; }
 .uwb-file-ident strong { overflow: hidden; color: var(--uwb-text); font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .uwb-file-actions, .uwb-diff-stats { display: flex; flex: none; align-items: center; gap: 6px; }
+.uwb-view-switch { display: flex; padding: 2px; background: var(--uwb-surface); border: 1px solid var(--uwb-border); border-radius: 7px; }
+.uwb-view-switch button { display: grid; width: 25px; height: 23px; padding: 0; place-items: center; color: var(--uwb-faint); background: transparent; border: 0; border-radius: 5px; cursor: pointer; }
+.uwb-view-switch button:hover { color: var(--uwb-text); background: var(--uwb-hover); }
+.uwb-view-switch button.active { color: var(--uwb-accent); background: var(--uwb-surface-2); box-shadow: 0 0 0 1px var(--uwb-border); }
 
 .uwb-code-view { min-width: max-content; padding: 10px 0 32px; counter-reset: line; }
 .uwb-line { display: flex; min-height: 20px; font-family: var(--uwb-code-font); font-size: 13px; line-height: 20px; }

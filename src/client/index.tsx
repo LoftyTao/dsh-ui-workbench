@@ -70,7 +70,7 @@ function isTypstFile(path: string): boolean {
   return path.toLowerCase().endsWith('.typ')
 }
 
-type IconName = 'chevron' | 'file' | 'folder' | 'git' | 'files' | 'refresh' | 'close' | 'copy' | 'branch' | 'search'
+type IconName = 'chevron' | 'file' | 'folder' | 'git' | 'files' | 'refresh' | 'close' | 'copy' | 'branch' | 'search' | 'preview' | 'code'
 
 function Icon(props: { name: IconName; size?: number; className?: string }): ReactNode {
   const size = props.size ?? 16
@@ -85,6 +85,8 @@ function Icon(props: { name: IconName; size?: number; className?: string }): Rea
     copy: <><rect width="14" height="14" x="8" y="8" rx="2" ry="2" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></>,
     branch: <><circle cx="6" cy="4" r="2" /><circle cx="18" cy="6" r="2" /><circle cx="6" cy="20" r="2" /><path d="M6 6v12M18 8a6 6 0 0 1-6 6H6" /></>,
     search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></>,
+    preview: <><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" /><circle cx="12" cy="12" r="2.5" /></>,
+    code: <><path d="m8 9-3 3 3 3" /><path d="m16 9 3 3-3 3" /><path d="m14 6-4 12" /></>,
   }
   return (
     <svg className={props.className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -588,6 +590,14 @@ function TypstPreview(props: { sessionId: string; cwd: string | null; path: stri
 
 function TypstFileViewer(props: { sessionId: string; cwd: string | null; file: FsTreeEntry }): ReactNode {
   const { t } = useI18n()
+  const [mode, setMode] = useState<'preview' | 'text'>('preview')
+  const modeSwitch = (
+    <div className="uwb-view-switch" role="tablist" aria-label={t('typstViewMode')}>
+      <button type="button" role="tab" aria-selected={mode === 'preview'} className={mode === 'preview' ? 'active' : ''} onClick={() => setMode('preview')} title={t('previewMode')} aria-label={t('previewMode')}><Icon name="preview" size={14} /></button>
+      <button type="button" role="tab" aria-selected={mode === 'text'} className={mode === 'text' ? 'active' : ''} onClick={() => setMode('text')} title={t('textMode')} aria-label={t('textMode')}><Icon name="code" size={14} /></button>
+    </div>
+  )
+  if (mode === 'text') return <SourceFileViewer sessionId={props.sessionId} cwd={props.cwd} file={props.file} actions={modeSwitch} />
   return (
     <div className="uwb-document uwb-typst-document">
       <div className="uwb-file-head">
@@ -595,6 +605,7 @@ function TypstFileViewer(props: { sessionId: string; cwd: string | null; file: F
           <strong>{fileName(props.file.path)}</strong>
         </div>
         <div className="uwb-file-actions">
+          {modeSwitch}
           <button className="uwb-icon-btn" onClick={() => void navigator.clipboard?.writeText(props.file.path)} title={t('copyFilePath')} aria-label={t('copyFilePath')}><Icon name="copy" size={15} /></button>
         </div>
       </div>
@@ -603,7 +614,7 @@ function TypstFileViewer(props: { sessionId: string; cwd: string | null; file: F
   )
 }
 
-function SourceFileViewer(props: { sessionId: string; cwd: string | null; file: FsTreeEntry | null }): ReactNode {
+function SourceFileViewer(props: { sessionId: string; cwd: string | null; file: FsTreeEntry | null; actions?: ReactNode }): ReactNode {
   const { t } = useI18n()
   const [content, setContent] = useState<{ path: string; text: string; truncated: boolean; nextOffset: number } | null>(null)
   const [err, setErr] = useState('')
@@ -664,6 +675,7 @@ function SourceFileViewer(props: { sessionId: string; cwd: string | null; file: 
           <strong>{fileName(content.path)}</strong>
         </div>
         <div className="uwb-file-actions">
+          {props.actions}
           <button className="uwb-icon-btn" onClick={() => void navigator.clipboard?.writeText(content.path)} title={t('copyFilePath')} aria-label={t('copyFilePath')}><Icon name="copy" size={15} /></button>
         </div>
       </div>
