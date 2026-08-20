@@ -66,6 +66,31 @@ export async function searchFiles(sessionId: string, cwd: string | null, query: 
   return { entries: Array.isArray(r.entries) ? r.entries : [], truncated: r.truncated === true }
 }
 
+export interface TypstPage {
+  width: number
+  height: number
+  content: string
+}
+
+export async function renderTypst(sessionId: string, cwd: string | null, path: string, revision?: string): Promise<{ pages: TypstPage[]; shared: string; diagnostics: string; revision: string; unchanged: boolean }> {
+  const r = await post<ApiEnvelope & { pages?: unknown[]; shared?: string; diagnostics?: string; revision?: string; unchanged?: boolean }>('/sidebar/api/typst/render', { sessionId, cwd, path, revision })
+  if (!r.ok) {
+    const error = new Error(r.error?.message ?? 'Typst rendering failed') as Error & { code?: string }
+    error.code = r.error?.code
+    throw error
+  }
+  return {
+    pages: Array.isArray(r.pages) ? r.pages.filter((page): page is TypstPage => {
+      const value = page as Partial<TypstPage>
+      return typeof value.width === 'number' && typeof value.height === 'number' && typeof value.content === 'string'
+    }) : [],
+    shared: r.shared ?? '',
+    diagnostics: r.diagnostics ?? '',
+    revision: r.revision ?? '',
+    unchanged: r.unchanged === true,
+  }
+}
+
 export async function gitBranch(sessionId: string, cwd: string | null): Promise<string> {
   const r = await post<ApiEnvelope & { branch?: string }>('/sidebar/api/git/branch', { sessionId, cwd })
   return r.branch ?? ''

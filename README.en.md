@@ -34,8 +34,11 @@ A DeepSeek Harness WebUI plugin. It adds a right-side panel to the conversation 
 - Unified and split diff views, changed-file filtering, and context folding
 - Diff views keep file syntax highlighting, use theme-aware base/strong background layers for line and inline changes, align inline ranges to the replaced characters, keep pure additions and deletions at line-background level, hide Git patch metadata, and label folded spans as `<count> unmodified lines`
 - Chinese/English support with live light/dark theme synchronization from DSH Appearance settings
+- Tinymist-style rich SVG preview for `.typ` files with white pages, a transparent selectable text layer, and whole-page dragging disabled; compilation errors preserve the last successful preview
 
-The host owns session-scoped paths, file reads, and Git operations. The browser owns the file tree, change tree, file viewer, and diff view. Both trees use one path hierarchy so folders and nested changes remain aligned. Workbench colors reuse the DSH `--dsw-*` semantic tokens and code-highlight variables, so the panel follows the Appearance setting without a second palette. Git review refreshes on initial load, explicit action, session or ref changes, and visible-window return events; fixed polling remains disabled.
+The host owns session-scoped paths, file reads, Typst compilation, and Git operations. The browser owns the file tree, change tree, file viewer, Typst preview, and diff view. Both trees use one path hierarchy so folders and nested changes remain aligned. Workbench colors reuse the DSH `--dsw-*` semantic tokens and code-highlight variables, so the panel follows the Appearance setting without a second palette. Git review refreshes on initial load, explicit action, session or ref changes, and visible-window return events; fixed polling remains disabled.
+
+Typst preview requires `typst` on the Harness Host's `PATH`. Set `DSH_TYPST_BIN` to an absolute executable path when needed. While a `.typ` file is selected and the page is visible, the preview checks Typst's reported dependencies and recompiles only when source, imports, or resources actually change. Compilation uses the current session workspace as `--root`, so imports and resource access cannot escape the workspace. The plugin bundles and prioritizes [LXGW Neo XiHei Screen Full](https://github.com/lxgw/LxgwNeoXiZhi-Screen) and no longer discovers `/mnt/c/Windows/Fonts` automatically. Additional font directories can still be supplied explicitly through Typst's standard `TYPST_FONT_PATHS` environment variable.
 
 ## Hot Reload
 
@@ -46,10 +49,10 @@ The Browser entry uses a global runtime owner for the React root, slot contribut
 Requires Node.js 22.19+ and DeepSeek Harness with the `web` profile.
 
 ```sh
-npx -y --package @deepseek-ai/dsh dsh plugin --profile web add github:LoftyTao/dsh-ui-workbench#v0.2.0
+npx -y --package @deepseek-ai/dsh dsh plugin --profile web add github:LoftyTao/dsh-ui-workbench#v0.3.0
 ```
 
-Use the `v0.2.0` tag to install the hot-reload, Git review, and light/dark theme features from this release. GitHub installs build from source; allow the `prepare` script when DSH prompts. After adding the package to the `web` profile, source builds are claimed by HMR in the same Web process; the theme integration adds no restart step, and one page load creates the initial Browser aggregate.
+Use the `v0.3.0` tag to install Typst live preview, hot reload, Git review, and light/dark theme features from this release. GitHub installs build from source; allow the `prepare` script when DSH prompts. After adding the package to the `web` profile, source builds are claimed by HMR in the same Web process; the theme integration adds no restart step, and one page load creates the initial Browser aggregate.
 
 ## License
 

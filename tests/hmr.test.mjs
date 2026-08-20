@@ -43,10 +43,10 @@ test('Host route registrations dispose and rebind cleanly during HMR', () => {
 
   assert.equal(result.name, 'dsh-ui-workbench')
   assert.deepEqual(result.inject, ['webServer', 'sessions'])
-  assert.equal(result.firstRoutes.length, 12)
-  assert.equal(result.secondRoutes.length, 12)
+  assert.equal(result.firstRoutes.length, 13)
+  assert.equal(result.secondRoutes.length, 13)
   assert.ok(result.secondRoutes.every((path) => path.startsWith('/sidebar/api/')))
   assert.equal(result.replaced, true)
-  assert.deepEqual(result.labels, Array.from({ length: 12 }, () => 'second'))
+  assert.deepEqual(result.labels, Array.from({ length: 13 }, () => 'second'))
   assert.equal(result.remaining, 0)
 })

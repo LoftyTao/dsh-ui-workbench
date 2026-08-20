@@ -17,10 +17,12 @@ import type { Context } from './context-types.ts'
 import { listDirectory, readTextFile, searchFiles } from './fs.ts'
 import * as git from './git.ts'
 import { assertWorkbenchInvariant, HOST_INJECT, PLUGIN_NAME } from './invariant.ts'
+import { renderTypst } from './typst.ts'
 import { readJsonBody, requireString, WorkbenchError, writeError, writeJson } from './wire.ts'
 
 export { Config }
 export type { WorkbenchConfig }
+export { renderTypst }
 
 export const name = PLUGIN_NAME
 
@@ -84,6 +86,7 @@ interface HandlerArgs {
   file?: string
   ref?: string
   query?: string
+  revision?: string
   full?: boolean
   offset?: number
 }
@@ -103,6 +106,7 @@ export function apply(ctx: Context, _config: WorkbenchConfig): void {
         file: typeof body.file === 'string' ? body.file : undefined,
         ref: typeof body.ref === 'string' ? body.ref : undefined,
         query: typeof body.query === 'string' ? body.query : undefined,
+        revision: typeof body.revision === 'string' ? body.revision : undefined,
         full: body.full === true,
         offset: typeof body.offset === 'number' && Number.isSafeInteger(body.offset) && body.offset >= 0 ? body.offset : undefined,
       }
@@ -145,6 +149,18 @@ export function apply(ctx: Context, _config: WorkbenchConfig): void {
         await workspaceRootOf(ctx, args.sessionId),
         requireString(args.query, 'query'),
       ),
+    },
+    {
+      method: 'renderTypst',
+      path: '/sidebar/api/typst/render',
+      handler: async (args) => {
+        const root = await workspaceRootOf(ctx, args.sessionId)
+        const target = await existingChildPath(root, requireString(args.path, 'path'))
+        const preview = await renderTypst(root, target)
+        return args.revision === preview.revision
+          ? { unchanged: true, revision: preview.revision }
+          : { ...preview, unchanged: false }
+      },
     },
     {
       method: 'gitRepository',

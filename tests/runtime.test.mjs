@@ -37,9 +37,10 @@ test('Browser aggregate replaces root, slot, and style in one window', () => {
       globalThis.Element = class Element {}
       globalThis.Element.prototype.matches = () => false
       globalThis.window = { __ModuleLoader__: { load(payload) {
-        const react = {
-          Fragment: Symbol.for('react.fragment'),
-          createContext: () => ({}),
+          const react = {
+            Fragment: Symbol.for('react.fragment'),
+            memo: (component) => component,
+            createContext: () => ({}),
           useContext: () => null,
           useState: (value) => [typeof value === 'function' ? value() : value, () => {}],
           useEffect: () => {},

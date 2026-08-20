@@ -34,10 +34,13 @@ DeepSeek Harness 的 WebUI 插件。在会话页右侧增加一个面板，提�
 - 统一和并排差异视图、变更文件筛选、上下文折叠
 - 差异视图隐藏 Git patch 元数据，保留文件语法高亮，使用主题感知的 base/strong 两级背景区分整行与行内变更；行内范围对齐实际替换字符，纯新增或删除行只保留行背景，并在折叠区显示 `<count> unmodified lines`
 - 中英文与亮暗主题适配，主题跟随 DSH 外观设置实时切换
+- `.typ` 文件的 Tinymist 风格 rich SVG 实时预览；白色页面、透明文本选择层且禁止整页拖拽，编译错误时保留上一版成功预览
 
 ## Provides / Model Experience
 
-Host 入口负责会话作用域、路径安全、文件读取和 Git 操作；Browser 入口负责文件树、变更树、文件查看器和差异视图。文件浏览与 Git 审查共用目录树模型，目录、嵌套文件和刷新后的展开状态保持一致。
+Host 入口负责会话作用域、路径安全、文件读取、Typst 编译和 Git 操作；Browser 入口负责文件树、变更树、文件查看器、Typst 预览和差异视图。文件浏览与 Git 审查共用目录树模型，目录、嵌套文件和刷新后的展开状态保持一致。
+
+Typst 预览需要 Harness Host 的 `PATH` 中存在 `typst`。也可以通过 `DSH_TYPST_BIN` 指定 Typst 可执行文件的绝对路径。打开 `.typ` 文件后，预览仅在该文件保持选中且页面可见时检查 Typst 报告的依赖，只有源文件、导入或资源实际变化时才重新编译；编译以当前会话工作区作为 `--root`，因此导入和资源访问不会越过工作区边界。插件内置并优先提供 [霞鹜新晰黑屏幕阅读版补全](https://github.com/lxgw/LxgwNeoXiZhi-Screen)，不再自动读取 `/mnt/c/Windows/Fonts`；仍可使用 Typst 标准环境变量 `TYPST_FONT_PATHS` 显式增加其他字体目录。
 
 Git 审查在初次加载、手动刷新、会话或引用变化以及窗口重新可见时更新。选中的变更文件仍然存在时，刷新保留当前 diff；固定时间轮询保持关闭。
 
@@ -69,10 +72,10 @@ dsh --profile web --dump-config
 需要 Node.js 22.19+ 与带 `web` profile 的 DeepSeek Harness。
 
 ```sh
-npx -y --package @deepseek-ai/dsh dsh plugin --profile web add github:LoftyTao/dsh-ui-workbench#v0.2.0
+npx -y --package @deepseek-ai/dsh dsh plugin --profile web add github:LoftyTao/dsh-ui-workbench#v0.3.0
 ```
 
-使用 `v0.2.0` tag 安装本轮热重载、Git 审查和亮暗主题特性。GitHub 安装会从源码构建，请在 DSH 提示时允许 `prepare` 脚本。将包加入 `web` profile 后，源码构建由 HMR 在同一 Web 进程接管；主题适配不增加重启步骤，页面加载一次即可完成初始 Browser aggregate。
+使用 `v0.3.0` tag 安装 Typst 实时预览、热重载、Git 审查和亮暗主题特性。GitHub 安装会从源码构建，请在 DSH 提示时允许 `prepare` 脚本。将包加入 `web` profile 后，源码构建由 HMR 在同一 Web 进程接管；主题适配不增加重启步骤，页面加载一次即可完成初始 Browser aggregate。
 
 ## 许可证
 

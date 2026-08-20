@@ -1,6 +1,6 @@
 {
   "name": "dsh-ui-workbench",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "DSH web plugin: a right-side workbench panel (file tree / file viewer / git review) with a draggable-width side panel that coexists with the official tool-details panel.",
   "repository": {
     "type": "git",
@@ -57,6 +57,9 @@
     "lib/invariant.js",
     "lib/client.js",
     "lib/types/**/*.d.ts",
+    "fonts/LXGWNeoXiHeiScreenFull.ttf",
+    "fonts/IPA_Font_License_Agreement_v1.0.txt",
+    "fonts/licenses_of_other_incorporated_fonts.txt",
     "bin/dsh-ui-workbench.mjs",
     "cordis.patch.yml",
     "README.md",
@@ -117,6 +120,7 @@
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "^3.18.1",
+    "@myriaddreamin/typst-ts-node-compiler": "0.7.0",
     "@react-symbols/icons": "^1.4.1",
     "prismjs": "^1.30.0"
   }

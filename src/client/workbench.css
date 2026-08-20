@@ -267,6 +267,25 @@ body.uwb-is-resizing, body.uwb-is-resizing * { cursor: col-resize !important; us
 .uwb-path { margin: 0; color: var(--uwb-faint); font-family: var(--uwb-code-font); font-size: 10px; word-break: break-all; }
 
 .uwb-notice { margin: 10px 14px 0; padding: 8px 10px; color: var(--uwb-amber); background: var(--uwb-surface-2); border: 1px solid var(--uwb-border); border-radius: 8px; font-size: 11px; }
+.uwb-typst-preview { display: flex; min-height: calc(100% - 53px); flex-direction: column; overflow: hidden; background: #fff; }
+.uwb-typst-document { display: flex; height: 100%; flex-direction: column; overflow: hidden; }
+.uwb-typst-document > .uwb-file-head { flex: none; }
+.uwb-typst-document > .uwb-typst-preview { flex: 1; min-height: 0; }
+.uwb-typst-toolbar { display: flex; flex: none; height: 40px; align-items: center; justify-content: center; gap: 5px; background: var(--uwb-bg); border-bottom: 1px solid var(--uwb-border); }
+.uwb-typst-toolbar .uwb-icon-btn:disabled { cursor: default; opacity: .35; }
+.uwb-page-prev svg { transform: rotate(180deg); }
+.uwb-page-position { display: flex; height: 28px; align-items: center; gap: 5px; padding: 0 8px; color: var(--uwb-faint); background: var(--uwb-surface); border: 1px solid var(--uwb-border); border-radius: 6px; font-size: 11px; }
+.uwb-page-position input { width: 3ch; padding: 0; color: var(--uwb-text); background: transparent; border: 0; outline: 0; font: inherit; text-align: right; }
+.uwb-page-position:focus-within { border-color: var(--uwb-accent); }
+.uwb-typst-scroll { flex: 1; min-height: 0; padding: 16px; overflow: auto; background: #eef0f3; }
+.uwb-typst-pages { display: flex; flex-direction: column; gap: 18px; }
+.uwb-typst-page-slot { contain: layout paint style; width: 100%; max-width: 100%; background: #fff; box-shadow: 0 2px 7px rgba(0, 0, 0, .14); }
+.uwb-typst-page-slot > svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.uwb-typst-page-slot .tsel { cursor: text; user-select: text; }
+.uwb-typst-page-slot .tsel::selection, .uwb-typst-page-slot .tsel span::selection { color: transparent; background: rgba(77, 107, 254, .32); }
+.uwb-typst-error { max-width: 760px; margin: 0 auto 14px; padding: 10px 12px; color: var(--uwb-red); background: var(--uwb-bg); border: 1px solid color-mix(in srgb, var(--uwb-red) 45%, var(--uwb-border)); border-radius: 8px; }
+.uwb-typst-error strong { display: block; margin-bottom: 5px; }
+.uwb-typst-error pre { margin: 0; overflow: auto; color: var(--uwb-muted); font-family: var(--uwb-code-font); font-size: 11px; line-height: 17px; white-space: pre-wrap; }
 .uwb-empty { padding: 16px; color: var(--uwb-muted); }
 .uwb-err { color: var(--uwb-red); }
 .uwb-empty-state { display: flex; width: 100%; min-height: 220px; align-items: center; justify-content: center; flex-direction: column; gap: 7px; padding: 24px; color: var(--uwb-muted); text-align: center; }

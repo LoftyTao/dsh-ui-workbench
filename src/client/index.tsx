@@ -5,7 +5,7 @@
  * tool-details panel untouched. A utility beside Session Log toggles the
  * panel; the panel's left edge and the file tree divider are both draggable.
  */
-import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore, useState, type ReactNode, type RefObject, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useSyncExternalStore, useState, type ReactNode, type RefObject, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { BracketsYellow as JsonFileIcon, CodeBlue as CssFileIcon, Docker as DockerFileIcon, Document as DocumentFileIcon, Go as GoFileIcon, Ignore as IgnoreFileIcon, Image as ImageFileIcon, Java as JavaFileIcon, Js as JavaScriptFileIcon, Markdown as MarkdownFileIcon, NPM as NpmFileIcon, PNPM as PnpmFileIcon, Python as PythonFileIcon, Reactjs as ReactJavaScriptFileIcon, Reactts as ReactTypeScriptFileIcon, Rust as RustFileIcon, Sass as SassFileIcon, Shell as ShellFileIcon, SVG as SvgFileIcon, Svelte as SvelteFileIcon, Text as TextFileIcon, Tsconfig as TsconfigFileIcon, TypeScript as TypeScriptFileIcon, Vue as VueFileIcon, XML as XmlFileIcon, Yaml as YamlFileIcon } from '@react-symbols/icons/files'
 import { Folder as FolderFileIcon } from '@react-symbols/icons/folders'
@@ -64,6 +64,10 @@ const FILE_ICON_BY_EXTENSION: Record<string, typeof TextFileIcon> = {
   java: JavaFileIcon, vue: VueFileIcon, svelte: SvelteFileIcon, yml: YamlFileIcon, yaml: YamlFileIcon,
   svg: SvgFileIcon, png: ImageFileIcon, jpg: ImageFileIcon, jpeg: ImageFileIcon, gif: ImageFileIcon, webp: ImageFileIcon,
   sh: ShellFileIcon, bash: ShellFileIcon, zsh: ShellFileIcon, ps1: ShellFileIcon, txt: TextFileIcon,
+}
+
+function isTypstFile(path: string): boolean {
+  return path.toLowerCase().endsWith('.typ')
 }
 
 type IconName = 'chevron' | 'file' | 'folder' | 'git' | 'files' | 'refresh' | 'close' | 'copy' | 'branch' | 'search'
@@ -408,7 +412,198 @@ function splitLines(text: string): string[] {
   return lines
 }
 
-function FileViewer(props: { sessionId: string; cwd: string | null; file: FsTreeEntry | null }): ReactNode {
+const LazyTypstPage = memo(function LazyTypstPage(props: { page: api.TypstPage; shared: string; index: number; visible: boolean }): ReactNode {
+  const svg = props.visible
+    ? `<svg class="typst-doc" viewBox="0 0 ${props.page.width} ${props.page.height}" width="${props.page.width}" height="${props.page.height}" data-width="${props.page.width}" data-height="${props.page.height}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:h5="http://www.w3.org/1999/xhtml">${props.shared}${props.page.content}</svg>`
+    : ''
+  return <div className="uwb-typst-page-slot" data-page-index={props.index} style={{ aspectRatio: `${props.page.width} / ${props.page.height}` }} role="document" aria-label={`Typst page ${props.index + 1}`} onDragStart={(event) => event.preventDefault()} dangerouslySetInnerHTML={{ __html: svg }} />
+})
+
+function TypstDocument(props: { pages: api.TypstPage[]; shared: string }): ReactNode {
+  const { t } = useI18n()
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const editing = useRef(false)
+  const scrollFrame = useRef(0)
+  const [visiblePages, setVisiblePages] = useState<ReadonlySet<number>>(() => new Set([0]))
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageInput, setPageInput] = useState('1')
+
+  const pageElements = (): HTMLElement[] => [...(scrollRef.current?.querySelectorAll<HTMLElement>('.uwb-typst-page-slot') ?? [])]
+  const goToPage = (requested: number, smooth = true): void => {
+    const pages = pageElements()
+    if (pages.length === 0) return
+    const page = Math.max(1, Math.min(Math.trunc(requested), pages.length))
+    const viewport = scrollRef.current
+    const target = pages[page - 1]
+    if (viewport === null || target === undefined) return
+    const top = target.getBoundingClientRect().top - viewport.getBoundingClientRect().top + viewport.scrollTop
+    viewport.scrollTo({ top, behavior: smooth ? 'smooth' : 'auto' })
+    setCurrentPage(page)
+    setPageInput(String(page))
+  }
+  const commitPageInput = (): void => {
+    const page = Number.parseInt(pageInput, 10)
+    goToPage(Number.isFinite(page) ? page : currentPage)
+  }
+
+  useEffect(() => {
+    const page = Math.min(currentPage, props.pages.length)
+    setCurrentPage(page)
+    setPageInput(String(page))
+  }, [props.pages])
+
+  useEffect(() => {
+    const viewport = scrollRef.current
+    if (viewport === null) return
+    setVisiblePages(new Set([0]))
+    const observer = new IntersectionObserver((entries) => {
+      setVisiblePages((current) => {
+        let next: Set<number> | undefined
+        for (const entry of entries) {
+          const index = Number((entry.target as HTMLElement).dataset.pageIndex)
+          if (!Number.isSafeInteger(index) || current.has(index) === entry.isIntersecting) continue
+          next ??= new Set(current)
+          if (entry.isIntersecting) next.add(index)
+          else next.delete(index)
+        }
+        return next ?? current
+      })
+    }, { root: viewport, rootMargin: '100% 0px' })
+    pageElements().forEach((page) => observer.observe(page))
+    return () => observer.disconnect()
+  }, [props.pages])
+
+  const onScroll = (): void => {
+    if (scrollFrame.current !== 0) return
+    scrollFrame.current = window.requestAnimationFrame(() => {
+      scrollFrame.current = 0
+      const viewport = scrollRef.current
+      const pages = pageElements()
+      if (viewport === null || pages.length === 0) return
+      const position = viewport.scrollTop + (pages[0]?.offsetTop ?? 0) + 1
+      let low = 0
+      let high = pages.length - 1
+      while (low < high) {
+        const middle = Math.ceil((low + high) / 2)
+        if ((pages[middle]?.offsetTop ?? 0) <= position) low = middle
+        else high = middle - 1
+      }
+      const page = low + 1
+      setCurrentPage((value) => value === page ? value : page)
+      if (!editing.current) setPageInput((value) => value === String(page) ? value : String(page))
+    })
+  }
+
+  useEffect(() => () => window.cancelAnimationFrame(scrollFrame.current), [])
+
+  return (
+    <>
+      <div className="uwb-typst-toolbar" role="group" aria-label={t('previewPage')}>
+        <button className="uwb-icon-btn uwb-page-prev" disabled={currentPage <= 1} onClick={() => goToPage(currentPage - 1)} title={t('previousPage')} aria-label={t('previousPage')}><Icon name="chevron" size={15} /></button>
+        <div className="uwb-page-position">
+          <input
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={pageInput}
+            aria-label={t('previewPage')}
+            onFocus={() => { editing.current = true }}
+            onChange={(event) => { if (/^\d*$/.test(event.target.value)) setPageInput(event.target.value) }}
+            onBlur={() => { commitPageInput(); editing.current = false }}
+            onKeyDown={(event) => { event.stopPropagation(); if (event.key === 'Enter') event.currentTarget.blur() }}
+            onKeyUp={(event) => event.stopPropagation()}
+          />
+          <span>/ {props.pages.length}</span>
+        </div>
+        <button className="uwb-icon-btn" disabled={currentPage >= props.pages.length} onClick={() => goToPage(currentPage + 1)} title={t('nextPage')} aria-label={t('nextPage')}><Icon name="chevron" size={15} /></button>
+      </div>
+      <div ref={scrollRef} className="uwb-typst-scroll" onScroll={onScroll}>
+        <div className="uwb-typst-pages">
+          {props.pages.map((page, index) => <LazyTypstPage key={index} page={page} shared={props.shared} index={index} visible={visiblePages.has(index)} />)}
+        </div>
+      </div>
+    </>
+  )
+}
+
+function TypstPreview(props: { sessionId: string; cwd: string | null; path: string }): ReactNode {
+  const { t } = useI18n()
+  const [pages, setPages] = useState<api.TypstPage[]>([])
+  const [shared, setShared] = useState('')
+  const [error, setError] = useState<{ message: string; code?: string } | null>(null)
+  const [rendering, setRendering] = useState(true)
+  const request = useRef(0)
+  const revision = useRef('')
+
+  useEffect(() => {
+    let disposed = false
+    let timer = 0
+    const render = async (): Promise<void> => {
+      if (document.visibilityState === 'hidden') {
+        timer = window.setTimeout(() => void render(), 1000)
+        return
+      }
+      const current = request.current + 1
+      request.current = current
+      try {
+        const result = await api.renderTypst(props.sessionId, props.cwd, props.path, revision.current)
+        if (disposed || current !== request.current) return
+        if (result.unchanged) return
+        revision.current = result.revision
+        setPages((value) => value.length === result.pages.length && value.every((page, index) => page.width === result.pages[index]?.width && page.height === result.pages[index]?.height && page.content === result.pages[index]?.content) ? value : result.pages)
+        setShared(result.shared)
+        setError(null)
+      } catch (cause) {
+        if (disposed || current !== request.current) return
+        const value = cause as Error & { code?: string }
+        setError({ message: value.message, code: value.code })
+      } finally {
+        if (!disposed && current === request.current) {
+          setRendering(false)
+          timer = window.setTimeout(() => void render(), 1000)
+        }
+      }
+    }
+    setPages([])
+    setShared('')
+    revision.current = ''
+    setError(null)
+    setRendering(true)
+    void render()
+    return () => { disposed = true; request.current += 1; window.clearTimeout(timer) }
+  }, [props.cwd, props.path, props.sessionId])
+
+  return (
+    <div className="uwb-typst-preview">
+      {rendering && pages.length === 0 ? <div className="uwb-loading"><span />{t('renderingTypst')}</div> : null}
+      {error === null ? null : (
+        <div className="uwb-typst-error">
+          <strong>{t('typstPreviewFailed')}</strong>
+          <pre>{error.code === 'typst-not-installed' ? t('typstNotInstalled') : error.message}</pre>
+        </div>
+      )}
+      {pages[0] === undefined ? null : <TypstDocument pages={pages} shared={shared} />}
+    </div>
+  )
+}
+
+function TypstFileViewer(props: { sessionId: string; cwd: string | null; file: FsTreeEntry }): ReactNode {
+  const { t } = useI18n()
+  return (
+    <div className="uwb-document uwb-typst-document">
+      <div className="uwb-file-head">
+        <div className="uwb-file-ident">
+          <strong>{fileName(props.file.path)}</strong>
+        </div>
+        <div className="uwb-file-actions">
+          <button className="uwb-icon-btn" onClick={() => void navigator.clipboard?.writeText(props.file.path)} title={t('copyFilePath')} aria-label={t('copyFilePath')}><Icon name="copy" size={15} /></button>
+        </div>
+      </div>
+      <TypstPreview sessionId={props.sessionId} cwd={props.cwd} path={props.file.path} />
+    </div>
+  )
+}
+
+function SourceFileViewer(props: { sessionId: string; cwd: string | null; file: FsTreeEntry | null }): ReactNode {
   const { t } = useI18n()
   const [content, setContent] = useState<{ path: string; text: string; truncated: boolean; nextOffset: number } | null>(null)
   const [err, setErr] = useState('')
@@ -485,6 +680,13 @@ function FileViewer(props: { sessionId: string; cwd: string | null; file: FsTree
       </div>
     </div>
   )
+}
+
+function FileViewer(props: { sessionId: string; cwd: string | null; file: FsTreeEntry | null }): ReactNode {
+  if (props.file !== null && isTypstFile(props.file.path)) {
+    return <TypstFileViewer sessionId={props.sessionId} cwd={props.cwd} file={props.file} />
+  }
+  return <SourceFileViewer {...props} />
 }
 
 function EmptyState(props: { icon: IconName; title: string; detail: string; action?: ReactNode }): ReactNode {
