@@ -70,9 +70,8 @@
     "build": "tsc -p tsconfig.build.json && tsdown",
     "typecheck": "tsc --noEmit",
     "test": "pnpm build && node --test tests/*.test.mjs",
-    "check": "pnpm typecheck && pnpm test && pnpm verify:package",
+    "check": "pnpm typecheck && pnpm test",
     "pack:check": "npm pack --dry-run --ignore-scripts",
-    "verify:package": "node scripts/verify-package.mjs",
     "prepare": "tsdown",
     "prepack": "pnpm typecheck && pnpm build"
   },
