@@ -61,7 +61,6 @@
     "fonts/LXGWNeoXiHeiScreenFull.ttf",
     "fonts/IPA_Font_License_Agreement_v1.0.txt",
     "fonts/licenses_of_other_incorporated_fonts.txt",
-    "bin/dsh-ui-workbench.mjs",
     "cordis.patch.yml",
     "README.md",
     "README.en.md"
@@ -74,9 +73,6 @@
     "pack:check": "npm pack --dry-run --ignore-scripts",
     "prepare": "tsdown",
     "prepack": "pnpm typecheck && pnpm build"
-  },
-  "bin": {
-    "dsh-ui-workbench": "bin/dsh-ui-workbench.mjs"
   },
   "license": "MIT",
   "peerDependencies": {
